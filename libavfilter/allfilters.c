@@ -292,6 +292,7 @@ extern AVFilter ff_vf_owdenoise;
 extern AVFilter ff_vf_pad;
 extern AVFilter ff_vf_palettegen;
 extern AVFilter ff_vf_paletteuse;
+extern AVFilter ff_vf_panorama;
 extern AVFilter ff_vf_perms;
 extern AVFilter ff_vf_perspective;
 extern AVFilter ff_vf_phase;

@@ -307,6 +307,7 @@ OBJS-$(CONFIG_OWDENOISE_FILTER)              += vf_owdenoise.o
 OBJS-$(CONFIG_PAD_FILTER)                    += vf_pad.o
 OBJS-$(CONFIG_PALETTEGEN_FILTER)             += vf_palettegen.o
 OBJS-$(CONFIG_PALETTEUSE_FILTER)             += vf_paletteuse.o framesync.o
+OBJS-$(CONFIG_PANORAMA_FILTER)               += vf_panorama.o
 OBJS-$(CONFIG_PERMS_FILTER)                  += f_perms.o
 OBJS-$(CONFIG_PERSPECTIVE_FILTER)            += vf_perspective.o
 OBJS-$(CONFIG_PHASE_FILTER)                  += vf_phase.o
