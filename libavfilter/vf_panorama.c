@@ -78,8 +78,8 @@ typedef struct PanoramaContext {
 static const AVOption panorama_options[] = {
     {    "input", "set input projection",         OFFSET(in), AV_OPT_TYPE_INT,   {.i64=EQUIRECTANGULAR}, 0,    NB_PROJECTIONS-1, FLAGS, "in" },
     {        "e", "equirectangular",                       0, AV_OPT_TYPE_CONST, {.i64=EQUIRECTANGULAR}, 0,                   0, FLAGS, "in" },
-    {     "c6x1", "cubemap",                               0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "in" },
-    {     "c3x2", "cubemap",                               0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_3_2},     0,                   0, FLAGS, "in" },
+    {     "c6x1", "cubemap6x1",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "in" },
+    {     "c3x2", "cubemap3x2",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_3_2},     0,                   0, FLAGS, "in" },
     {   "output", "set output projection",       OFFSET(out), AV_OPT_TYPE_INT,   {.i64=CUBEMAP_3_2},     0,    NB_PROJECTIONS-1, FLAGS, "out" },
     {        "e", "equirectangular",                       0, AV_OPT_TYPE_CONST, {.i64=EQUIRECTANGULAR}, 0,                   0, FLAGS, "out" },
     {     "c6x1", "cubemap6x1",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "out" },
@@ -190,30 +190,37 @@ static void cube3x2_to_xyz(int i, int j, int width, int height,
     double norm;
     double l_x, l_y, l_z;
 
-    if (face == BACK) {
+    switch (face) {
+    case BACK:
         l_x = -1     ;
         l_y = -3. + b;
         l_z =  5. - a;
-    } else if (face == LEFT) {
+        break;
+    case LEFT:
         l_x =  a  - 3;
         l_y = -1. + b;
         l_z = -1     ;
-    } else if (face == FRONT) {
+        break;
+    case FRONT:
         l_x =  1     ;
         l_y = -3. + b;
         l_z =  a  - 3;
-    } else if (face == RIGHT) {
+        break;
+    case RIGHT:
         l_x =  1. - a;
         l_y = -1. + b;
         l_z =  1     ;
-    } else if (face == TOP) {
+        break;
+    case TOP:
         l_x =  b  - 1;
         l_y = -1     ;
         l_z =  a  - 5;
-    } else if (face == DOWN) {
+        break;
+    case DOWN:
         l_x = -b  + 3;
         l_y =  1     ;
         l_z =  a  - 1;
+        break;
     }
 
     norm = sqrt(l_x * l_x + l_y * l_y + l_z * l_z);
@@ -254,8 +261,6 @@ static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
         face = DOWN;
     } else if (phi < -phi_threshold) {
         face = TOP;
-    } else {
-        ;
     }
 
     switch (face) {
@@ -307,30 +312,37 @@ static void cube6x1_to_xyz(int i, int j, int width, int height,
     double norm;
     double l_x, l_y, l_z;
 
-    if (face == BACK) {
+    switch (face) {
+    case BACK:
         l_x = -1     ;
         l_y = -1. + b;
         l_z = 11. - a;
-    } else if (face == LEFT) {
+        break;
+    case LEFT:
         l_x =  a  - 3;
         l_y = -1. + b;
         l_z = -1     ;
-    } else if (face == FRONT) {
+        break;
+    case FRONT:
         l_x =  1     ;
         l_y = -1. + b;
         l_z =  a  - 9;
-    } else if (face == RIGHT) {
+        break;
+    case RIGHT:
         l_x =  1. - a;
         l_y = -1. + b;
         l_z =  1     ;
-    } else if (face == TOP) {
+        break;
+    case TOP:
         l_x =  b  - 1;
         l_y = -1     ;
         l_z =  a  - 5;
-    } else if (face == DOWN) {
+        break;
+    case DOWN:
         l_x = -b  + 1;
         l_y =  1     ;
         l_z =  a  - 7;
+        break;
     }
 
     norm = sqrt(l_x * l_x + l_y * l_y + l_z * l_z);
@@ -371,8 +383,6 @@ static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
         face = DOWN;
     } else if (phi < -phi_threshold) {
         face = TOP;
-    } else {
-        ;
     }
 
     switch (face) {
