@@ -13382,6 +13382,56 @@ ffmpeg -i input.mkv -i palette.png -lavfi paletteuse output.gif
 @end example
 @end itemize
 
+@section panorama
+
+Convert panorama videos between various formats.
+
+The filter accepts the following options:
+
+@table @option
+@item input
+Set format of input video.
+@item output
+Set format of output video.
+
+Available formats:
+
+@table @samp
+@item e
+Equirectangular projection.
+@item c6x1
+Cubemap with 6x1 layout.
+@item c3x2
+Cubemap with 3x2 layout.
+
+@end table
+
+@item interp
+Set interpolation method.
+
+Available methods:
+
+@table @samp
+@item near
+Nearest neighbour
+@item line
+Bilinear interpolation
+@end table
+
+Default value is @samp{line}.
+
+@end table
+
+@subsection Examples
+
+@itemize
+@item
+Convert equirectangular video to cubemap with 3x2 layout using bilinear interpolation:
+@example
+ffmpeg -i input.mkv -vf panorama=e:c3x2:line output.mkv
+@end example
+@end itemize
+
 @section perspective
 
 Correct perspective of video not recorded perpendicular to the screen.
