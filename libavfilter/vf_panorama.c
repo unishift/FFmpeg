@@ -34,9 +34,9 @@ enum Projections {
 };
 
 enum InterpMethod {
-  NEAREST,
-  BILINEAR,
-  NB_INTERP_METHODS,
+    NEAREST,
+    BILINEAR,
+    NB_INTERP_METHODS,
 };
 
 enum Faces {
@@ -295,9 +295,9 @@ static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
     v2 = av_clip(v2, 0, 2 * rh - 1);
     u2 = av_clip(u2, 0, 2 * rw - 1);
 
-    *i = ui + (width / 3.) * (face % 3);
+    *i  = ui + (width / 3.) * (face % 3);
     *i2 = u2 + (width / 3.) * (face % 3);
-    *j = vi + (height / 2.) * (face / 3);
+    *j  = vi + (height / 2.) * (face / 3);
     *j2 = v2 + (height / 2.) * (face / 3);
 }
 
@@ -417,9 +417,9 @@ static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
     v2 = av_clip(v2, 0, 2 * rh - 1);
     u2 = av_clip(u2, 0, 2 * rw - 1);
 
-    *i =  ui + (width / 6.) * face;
+    *i  = ui + (width / 6.) * face;
     *i2 = u2 + (width / 6.) * face;
-    *j =  vi;
+    *j  = vi;
     *j2 = v2;
 }
 
@@ -451,8 +451,8 @@ static void xyz_to_equirect(double x, double y, double z, int width, int height,
 
     *mu = uf - ui;
     *nu = vf - vi;
-    *j =  av_clip(vi, 0, height - 1);
-    *i =  ui % width;
+    *j  = av_clip(vi, 0, height - 1);
+    *i  = ui % width;
     *j2 = av_clip(v2, 0, height - 1);
     *i2 = u2 % width;
 }
