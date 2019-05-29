@@ -170,15 +170,6 @@ static inline int in_range(double rd, double small, double large, double res)
           &&  smaller(rd, large, res);
 }
 
-static void locate(double axis, double x, double y, double rad,
-                   double rw, double rh, double *ox, double *oy)
-{
-    *ox = rw / axis * (x * cos(rad) - y * sin(rad));
-    *oy = rh / axis * (x * sin(rad) + y * cos(rad));
-    *ox += rw;
-    *oy += rh;
-}
-
 static void cube3x2_to_xyz(int i, int j, int width, int height,
                            double *x, double *y, double *z)
 {
@@ -237,9 +228,9 @@ static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
     double theta_norm, phi_threshold;
     double res = M_PI_4 / (width / 3) / 10.0;
     double uf, vf;
+    double rh = height / 4.0;
+    double rw = width / 6.0;
     int ui, vi, u2, v2;
-    int rh = height / 4;
-    int rw = width / 6;
     int face;
 
     if (in_range(theta, -M_PI_4, M_PI_4, res)) {
@@ -265,22 +256,28 @@ static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
 
     switch (face) {
     case LEFT:
-        locate(z, x, y, M_PI, rw, rh, &uf, &vf);
+        uf = rw * (-x / z + 1.0);
+        vf = rh * (-y / z + 1.0);
         break;
     case FRONT:
-        locate(x, z, y, 0., rw, rh, &uf, &vf);
+        uf = rw * ( z / x + 1.0);
+        vf = rh * ( y / x + 1.0);
         break;
     case RIGHT:
-        locate(z, y, x, M_PI_2, rw, rh, &uf, &vf);
+        uf = rw * (-x / z + 1.0);
+        vf = rh * ( y / z + 1.0);
         break;
     case TOP:
-        locate(y, z, x, M_PI, rw, rh, &uf, &vf);
+        uf = rw * (-z / y + 1.0);
+        vf = rh * (-x / y + 1.0);
         break;
     case BACK:
-        locate(x, y, z, -M_PI_2, rw, rh, &uf, &vf);
+        uf = rw * ( z / x + 1.0);
+        vf = rh * (-y / x + 1.0);
         break;
     case DOWN:
-        locate(y, x, z, -M_PI_2, rw, rh, &uf, &vf);
+        uf = rw * ( z / y + 1.0);
+        vf = rh * (-x / y + 1.0);
         break;
     }
 
@@ -359,9 +356,9 @@ static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
     double theta_norm, phi_threshold;
     double res = M_PI_4 / (width / 6) / 10.0;
     double uf, vf;
+    double rh = height / 2;
+    double rw = width / 12;
     int ui, vi, u2, v2;
-    int rh = height / 2;
-    int rw = width / 12;
     int face;
 
     if (in_range(theta, -M_PI_4, M_PI_4, res)) {
@@ -387,22 +384,28 @@ static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
 
     switch (face) {
     case LEFT:
-        locate(z, x, y, M_PI, rw, rh, &uf, &vf);
+        uf = rw * (-x / z + 1.0);
+        vf = rh * (-y / z + 1.0);
         break;
     case FRONT:
-        locate(x, z, y, 0., rw, rh, &uf, &vf);
+        uf = rw * ( z / x + 1.0);
+        vf = rh * ( y / x + 1.0);
         break;
     case RIGHT:
-        locate(z, y, x, M_PI_2, rw, rh, &uf, &vf);
+        uf = rw * (-x / z + 1.0);
+        vf = rh * ( y / z + 1.0);
         break;
     case TOP:
-        locate(y, z, x, M_PI, rw, rh, &uf, &vf);
+        uf = rw * (-z / y + 1.0);
+        vf = rh * (-x / y + 1.0);
         break;
     case BACK:
-        locate(x, y, z, -M_PI_2, rw, rh, &uf, &vf);
+        uf = rw * ( z / x + 1.0);
+        vf = rh * (-y / x + 1.0);
         break;
     case DOWN:
-        locate(y, x, z, -M_PI_2, rw, rh, &uf, &vf);
+        uf = rw * ( z / y + 1.0);
+        vf = rh * (-x / y + 1.0);
         break;
     }
 
