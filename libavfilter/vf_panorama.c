@@ -183,34 +183,34 @@ static void cube3x2_to_xyz(int i, int j, int width, int height,
 
     switch (face) {
     case BACK:
-        l_x = -1     ;
-        l_y = -3. + b;
-        l_z =  5. - a;
+        l_x =  5. - a;
+        l_y =  3. - b;
+        l_z =  1.    ;
         break;
     case LEFT:
-        l_x =  a  - 3;
-        l_y = -1. + b;
-        l_z = -1     ;
+        l_x = -1.    ;
+        l_y =  1. - b;
+        l_z = -a  + 3;
         break;
     case FRONT:
-        l_x =  1     ;
-        l_y = -3. + b;
-        l_z =  a  - 3;
+        l_x =  a  - 3;
+        l_y =  3. - b;
+        l_z = -1.    ;
         break;
     case RIGHT:
-        l_x =  1. - a;
-        l_y = -1. + b;
-        l_z =  1     ;
+        l_x =  1.    ;
+        l_y =  1. - b;
+        l_z = -1. + a;
         break;
     case TOP:
-        l_x =  b  - 1;
-        l_y = -1     ;
-        l_z =  a  - 5;
+        l_x =  a  - 5;
+        l_y =  1     ;
+        l_z = -b  + 1;
         break;
     case DOWN:
-        l_x = -b  + 3;
-        l_y =  1     ;
-        l_z =  a  - 1;
+        l_x =  a  - 1;
+        l_y = -1     ;
+        l_z =  b  - 3;
         break;
     }
 
@@ -223,61 +223,61 @@ static void cube3x2_to_xyz(int i, int j, int width, int height,
 static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
                            int *i, int *j, int *i2, int *j2, double *mu, double *nu)
 {
-    double theta = atan2(z, x);
-    double phi = asin(y);
-    double theta_norm, phi_threshold;
+    double phi_norm, theta_threshold;
     double res = M_PI_4 / (width / 3) / 10.0;
     double uf, vf;
     double rh = height / 4.0;
     double rw = width / 6.0;
     int ui, vi, u2, v2;
     int face;
+    double phi   = atan2(x, -z);
+    double theta = asin(-y);
 
-    if (in_range(theta, -M_PI_4, M_PI_4, res)) {
+    if (in_range(phi, -M_PI_4, M_PI_4, res)) {
         face = FRONT;
-        theta_norm = theta;
-    } else if (in_range(theta, -(M_PI_2 + M_PI_4), -M_PI_4, res)) {
+        phi_norm = phi;
+    } else if (in_range(phi, -(M_PI_2 + M_PI_4), -M_PI_4, res)) {
         face = LEFT;
-        theta_norm = theta + M_PI_2;
-    } else if (in_range(theta, M_PI_4, M_PI_2 + M_PI_4, res)) {
+        phi_norm = phi + M_PI_2;
+    } else if (in_range(phi, M_PI_4, M_PI_2 + M_PI_4, res)) {
         face = RIGHT;
-        theta_norm = theta - M_PI_2;
+        phi_norm = phi - M_PI_2;
     } else {
         face = BACK;
-        theta_norm = theta + ((theta > 0) ? -M_PI : M_PI);
+        phi_norm = phi + ((phi > 0) ? -M_PI : M_PI);
     }
 
-    phi_threshold = atan2(1., 1. / cos(theta_norm));
-    if (phi > phi_threshold) {
+    theta_threshold = atan2(1., 1. / cos(phi_norm));
+    if (theta > theta_threshold) {
         face = DOWN;
-    } else if (phi < -phi_threshold) {
+    } else if (theta < -theta_threshold) {
         face = TOP;
     }
 
     switch (face) {
     case LEFT:
-        uf = rw * (-x / z + 1.0);
-        vf = rh * (-y / z + 1.0);
-        break;
-    case FRONT:
         uf = rw * ( z / x + 1.0);
         vf = rh * ( y / x + 1.0);
         break;
-    case RIGHT:
+    case FRONT:
         uf = rw * (-x / z + 1.0);
         vf = rh * ( y / z + 1.0);
         break;
-    case TOP:
-        uf = rw * (-z / y + 1.0);
-        vf = rh * (-x / y + 1.0);
-        break;
-    case BACK:
+    case RIGHT:
         uf = rw * ( z / x + 1.0);
         vf = rh * (-y / x + 1.0);
         break;
+    case TOP:
+        uf = rw * ( x / y + 1.0);
+        vf = rh * (-z / y + 1.0);
+        break;
+    case BACK:
+        uf = rw * (-x / z + 1.0);
+        vf = rh * (-y / z + 1.0);
+        break;
     case DOWN:
-        uf = rw * ( z / y + 1.0);
-        vf = rh * (-x / y + 1.0);
+        uf = rw * (-x / y + 1.0);
+        vf = rh * (-z / y + 1.0);
         break;
     }
 
@@ -311,34 +311,34 @@ static void cube6x1_to_xyz(int i, int j, int width, int height,
 
     switch (face) {
     case BACK:
-        l_x = -1     ;
-        l_y = -1. + b;
-        l_z = 11. - a;
+        l_x = 11. - a;
+        l_y =  1. - b;
+        l_z =  1.    ;
         break;
     case LEFT:
-        l_x =  a  - 3;
-        l_y = -1. + b;
-        l_z = -1     ;
+        l_x = -1.    ;
+        l_y =  1. - b;
+        l_z = -a  + 3;
         break;
     case FRONT:
-        l_x =  1     ;
-        l_y = -1. + b;
-        l_z =  a  - 9;
+        l_x =  a  - 9;
+        l_y =  1. - b;
+        l_z = -1.    ;
         break;
     case RIGHT:
-        l_x =  1. - a;
-        l_y = -1. + b;
-        l_z =  1     ;
+        l_x =  1     ;
+        l_y =  1. - b;
+        l_z = -1. + a;
         break;
     case TOP:
-        l_x =  b  - 1;
-        l_y = -1     ;
-        l_z =  a  - 5;
+        l_x =  a  - 5;
+        l_y =  1.    ;
+        l_z = -b  + 1;
         break;
     case DOWN:
-        l_x = -b  + 1;
-        l_y =  1     ;
-        l_z =  a  - 7;
+        l_x =  a  - 7;
+        l_y = -1.    ;
+        l_z =  b  - 1;
         break;
     }
 
@@ -351,61 +351,62 @@ static void cube6x1_to_xyz(int i, int j, int width, int height,
 static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
                            int *i, int *j, int *i2, int *j2, double *mu, double *nu)
 {
-    double theta = atan2(z, x);
-    double phi = asin(y);
-    double theta_norm, phi_threshold;
+    double phi_norm, theta_threshold;
     double res = M_PI_4 / (width / 6) / 10.0;
     double uf, vf;
     double rh = height / 2;
     double rw = width / 12;
     int ui, vi, u2, v2;
     int face;
+    double phi   = atan2(x, -z);
+    double theta = asin(-y);
 
-    if (in_range(theta, -M_PI_4, M_PI_4, res)) {
+    if (in_range(phi, -M_PI_4, M_PI_4, res)) {
         face = FRONT;
-        theta_norm = theta;
-    } else if (in_range(theta, -(M_PI_2 + M_PI_4), -M_PI_4, res)) {
+        phi_norm = phi;
+    } else if (in_range(phi, -(M_PI_2 + M_PI_4), -M_PI_4, res)) {
         face = LEFT;
-        theta_norm = theta + M_PI_2;
-    } else if (in_range(theta, M_PI_4, M_PI_2 + M_PI_4, res)) {
+        phi_norm = phi + M_PI_2;
+    } else if (in_range(phi, M_PI_4, M_PI_2 + M_PI_4, res)) {
         face = RIGHT;
-        theta_norm = theta - M_PI_2;
+        phi_norm = phi - M_PI_2;
     } else {
         face = BACK;
-        theta_norm = theta + ((theta > 0) ? -M_PI : M_PI);
+        phi_norm = phi + ((phi > 0) ? -M_PI : M_PI);
     }
 
-    phi_threshold = atan2(1., 1. / cos(theta_norm));
-    if (phi > phi_threshold) {
+    theta_threshold = atan2(1., 1. / cos(phi_norm));
+    if (theta > theta_threshold) {
         face = DOWN;
-    } else if (phi < -phi_threshold) {
+    } else if (theta < -theta_threshold) {
         face = TOP;
     }
 
+
     switch (face) {
     case LEFT:
-        uf = rw * (-x / z + 1.0);
-        vf = rh * (-y / z + 1.0);
-        break;
-    case FRONT:
         uf = rw * ( z / x + 1.0);
         vf = rh * ( y / x + 1.0);
         break;
-    case RIGHT:
+    case FRONT:
         uf = rw * (-x / z + 1.0);
         vf = rh * ( y / z + 1.0);
         break;
-    case TOP:
-        uf = rw * (-z / y + 1.0);
-        vf = rh * (-x / y + 1.0);
-        break;
-    case BACK:
+    case RIGHT:
         uf = rw * ( z / x + 1.0);
         vf = rh * (-y / x + 1.0);
         break;
+    case TOP:
+        uf = rw * ( x / y + 1.0);
+        vf = rh * (-z / y + 1.0);
+        break;
+    case BACK:
+        uf = rw * (-x / z + 1.0);
+        vf = rh * (-y / z + 1.0);
+        break;
     case DOWN:
-        uf = rw * ( z / y + 1.0);
-        vf = rh * (-x / y + 1.0);
+        uf = rw * (-x / y + 1.0);
+        vf = rh * (-z / y + 1.0);
         break;
     }
 
@@ -429,12 +430,17 @@ static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
 static void equirect_to_xyz(int i, int j, int width, int height,
                             double *x, double *y, double *z)
 {
-    double theta = ((2. * i) / width  - 1.) * M_PI;
-    double phi =   ((2. * j) / height - 1.) * M_PI_2;
+    double phi   = ((2. * i) / width  - 1.) * M_PI;
+    double theta = ((2. * j) / height - 1.) * M_PI_2;
 
-    *x = cos(phi) * cos(theta);
-    *y = sin(phi);
-    *z = cos(phi) * sin(theta);
+    const double sin_phi = sin(phi);
+    const double cos_phi = cos(phi);
+    const double sin_theta = sin(theta);
+    const double cos_theta = cos(theta);
+
+    *x =  cos_theta * sin_phi;
+    *y = -sin_theta;
+    *z = -cos_theta * cos_phi;
 }
 
 static void xyz_to_equirect(double x, double y, double z, int width, int height,
@@ -442,11 +448,11 @@ static void xyz_to_equirect(double x, double y, double z, int width, int height,
 {
     double uf, vf;
     int ui, vi, u2, v2;
-    double theta = atan2(z, x);
-    double phi = asin(y);
+    double phi   = atan2(x, -z);
+    double theta = asin(-y);
 
-    uf = (theta / M_PI + 1.) * width / 2.;
-    vf = (phi / M_PI_2 + 1.) * height / 2.;
+    uf = (phi / M_PI + 1.) * width / 2.;
+    vf = (theta / M_PI_2 + 1.) * height / 2.;
     ui = floor(uf);
     vi = floor(vf);
     u2 = ui + 1;
