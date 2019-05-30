@@ -487,28 +487,34 @@ static int config_output(AVFilterLink *outlink)
         av_assert0(0);
     }
 
-    if (s->in == EQUIRECTANGULAR && s->out == CUBEMAP_3_2) {
-        w = inlink->w / 4 * 3;
-        h = inlink->h;
-    } else if (s->in == EQUIRECTANGULAR && s->out == CUBEMAP_6_1) {
-        w = inlink->w / 4 * 6;
-        h = inlink->h / 2;
-    } else if (s->in == CUBEMAP_3_2 && s->out == EQUIRECTANGULAR) {
-        w = inlink->w / 3 * 4;
-        h = inlink->h;
-    } else if (s->in == CUBEMAP_6_1 && s->out == EQUIRECTANGULAR) {
-        w = inlink->w / 6 * 4;
-        h = inlink->h * 2;
-    } else if (s->in == CUBEMAP_3_2 && s->out == CUBEMAP_6_1) {
-        w = inlink->w * 2;
-        h = inlink->h / 2;
-    } else if (s->in == CUBEMAP_6_1 && s->out == CUBEMAP_3_2) {
-        w = inlink->w / 2;
-        h = inlink->h * 2;
-    } else if (s->in == s->out) {
+    switch (s->in) {
+    case EQUIRECTANGULAR:
         w = inlink->w;
         h = inlink->h;
-    } else {
+        break;
+    case CUBEMAP_3_2:
+        w = inlink->w / 3 * 4;
+        h = inlink->h;
+        break;
+    case CUBEMAP_6_1:
+        w = inlink->w / 3 * 2;
+        h = inlink->h * 2;
+        break;
+    default:
+        av_assert0(0);
+    }
+
+    switch (s->out) {
+    case EQUIRECTANGULAR:
+        break;
+    case CUBEMAP_3_2:
+        w = w / 4 * 3;
+        break;
+    case CUBEMAP_6_1:
+        w = w / 2 * 3;
+        h = h / 2;
+        break;
+    default:
         av_assert0(0);
     }
 
