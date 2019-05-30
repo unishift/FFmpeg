@@ -479,11 +479,14 @@ static int config_output(AVFilterLink *outlink)
     void (*out_transform)(int i, int j, int width, int height,
                           double *x, double *y, double *z);
 
-    if (s->interp == NEAREST) {
+    switch (s->interp) {
+    case NEAREST:
         s->panorama = nearest;
-    } else if (s->interp == BILINEAR) {
+        break;
+    case BILINEAR:
         s->panorama = bilinear;
-    } else {
+        break;
+    default:
         av_assert0(0);
     }
 
