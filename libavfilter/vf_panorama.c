@@ -40,12 +40,12 @@ enum InterpMethod {
 };
 
 enum Faces {
-    RIGHT,
-    LEFT,
-    TOP,
-    DOWN,
-    FRONT,
-    BACK,
+    TOP_LEFT,
+    TOP_MIDDLE,
+    TOP_RIGHT,
+    BOTTOM_LEFT,
+    BOTTOM_MIDDLE,
+    BOTTOM_RIGHT,
 };
 
 struct XYRemap {
@@ -182,32 +182,32 @@ static void cube3x2_to_xyz(int i, int j, int width, int height,
     double l_x, l_y, l_z;
 
     switch (face) {
-    case BACK:
+    case BOTTOM_RIGHT:
         l_x =  5. - a;
         l_y =  3. - b;
         l_z =  1.    ;
         break;
-    case LEFT:
+    case TOP_MIDDLE:
         l_x = -1.    ;
         l_y =  1. - b;
         l_z = -a  + 3;
         break;
-    case FRONT:
+    case BOTTOM_MIDDLE:
         l_x =  a  - 3;
         l_y =  3. - b;
         l_z = -1.    ;
         break;
-    case RIGHT:
+    case TOP_LEFT:
         l_x =  1.    ;
         l_y =  1. - b;
         l_z = -1. + a;
         break;
-    case TOP:
+    case TOP_RIGHT:
         l_x =  a  - 5;
         l_y =  1     ;
         l_z = -b  + 1;
         break;
-    case DOWN:
+    case BOTTOM_LEFT:
         l_x =  a  - 1;
         l_y = -1     ;
         l_z =  b  - 3;
@@ -234,48 +234,48 @@ static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
     double theta = asin(-y);
 
     if (in_range(phi, -M_PI_4, M_PI_4, res)) {
-        face = FRONT;
+        face = BOTTOM_MIDDLE;
         phi_norm = phi;
     } else if (in_range(phi, -(M_PI_2 + M_PI_4), -M_PI_4, res)) {
-        face = LEFT;
+        face = TOP_MIDDLE;
         phi_norm = phi + M_PI_2;
     } else if (in_range(phi, M_PI_4, M_PI_2 + M_PI_4, res)) {
-        face = RIGHT;
+        face = TOP_LEFT;
         phi_norm = phi - M_PI_2;
     } else {
-        face = BACK;
+        face = BOTTOM_RIGHT;
         phi_norm = phi + ((phi > 0) ? -M_PI : M_PI);
     }
 
     theta_threshold = atan2(1., 1. / cos(phi_norm));
     if (theta > theta_threshold) {
-        face = DOWN;
+        face = BOTTOM_LEFT;
     } else if (theta < -theta_threshold) {
-        face = TOP;
+        face = TOP_RIGHT;
     }
 
     switch (face) {
-    case LEFT:
+    case TOP_MIDDLE:
         uf = rw * ( z / x + 1.0);
         vf = rh * ( y / x + 1.0);
         break;
-    case FRONT:
+    case BOTTOM_MIDDLE:
         uf = rw * (-x / z + 1.0);
         vf = rh * ( y / z + 1.0);
         break;
-    case RIGHT:
+    case TOP_LEFT:
         uf = rw * ( z / x + 1.0);
         vf = rh * (-y / x + 1.0);
         break;
-    case TOP:
+    case TOP_RIGHT:
         uf = rw * ( x / y + 1.0);
         vf = rh * (-z / y + 1.0);
         break;
-    case BACK:
+    case BOTTOM_RIGHT:
         uf = rw * (-x / z + 1.0);
         vf = rh * (-y / z + 1.0);
         break;
-    case DOWN:
+    case BOTTOM_LEFT:
         uf = rw * (-x / y + 1.0);
         vf = rh * (-z / y + 1.0);
         break;
@@ -310,32 +310,32 @@ static void cube6x1_to_xyz(int i, int j, int width, int height,
     double l_x, l_y, l_z;
 
     switch (face) {
-    case BACK:
+    case BOTTOM_RIGHT:
         l_x = 11. - a;
         l_y =  1. - b;
         l_z =  1.    ;
         break;
-    case LEFT:
+    case TOP_MIDDLE:
         l_x = -1.    ;
         l_y =  1. - b;
         l_z = -a  + 3;
         break;
-    case FRONT:
+    case BOTTOM_MIDDLE:
         l_x =  a  - 9;
         l_y =  1. - b;
         l_z = -1.    ;
         break;
-    case RIGHT:
+    case TOP_LEFT:
         l_x =  1     ;
         l_y =  1. - b;
         l_z = -1. + a;
         break;
-    case TOP:
+    case TOP_RIGHT:
         l_x =  a  - 5;
         l_y =  1.    ;
         l_z = -b  + 1;
         break;
-    case DOWN:
+    case BOTTOM_LEFT:
         l_x =  a  - 7;
         l_y = -1.    ;
         l_z =  b  - 1;
@@ -362,49 +362,49 @@ static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
     double theta = asin(-y);
 
     if (in_range(phi, -M_PI_4, M_PI_4, res)) {
-        face = FRONT;
+        face = BOTTOM_MIDDLE;
         phi_norm = phi;
     } else if (in_range(phi, -(M_PI_2 + M_PI_4), -M_PI_4, res)) {
-        face = LEFT;
+        face = TOP_MIDDLE;
         phi_norm = phi + M_PI_2;
     } else if (in_range(phi, M_PI_4, M_PI_2 + M_PI_4, res)) {
-        face = RIGHT;
+        face = TOP_LEFT;
         phi_norm = phi - M_PI_2;
     } else {
-        face = BACK;
+        face = BOTTOM_RIGHT;
         phi_norm = phi + ((phi > 0) ? -M_PI : M_PI);
     }
 
     theta_threshold = atan2(1., 1. / cos(phi_norm));
     if (theta > theta_threshold) {
-        face = DOWN;
+        face = BOTTOM_LEFT;
     } else if (theta < -theta_threshold) {
-        face = TOP;
+        face = TOP_RIGHT;
     }
 
 
     switch (face) {
-    case LEFT:
+    case TOP_MIDDLE:
         uf = rw * ( z / x + 1.0);
         vf = rh * ( y / x + 1.0);
         break;
-    case FRONT:
+    case BOTTOM_MIDDLE:
         uf = rw * (-x / z + 1.0);
         vf = rh * ( y / z + 1.0);
         break;
-    case RIGHT:
+    case TOP_LEFT:
         uf = rw * ( z / x + 1.0);
         vf = rh * (-y / x + 1.0);
         break;
-    case TOP:
+    case TOP_RIGHT:
         uf = rw * ( x / y + 1.0);
         vf = rh * (-z / y + 1.0);
         break;
-    case BACK:
+    case BOTTOM_RIGHT:
         uf = rw * (-x / z + 1.0);
         vf = rh * (-y / z + 1.0);
         break;
-    case DOWN:
+    case BOTTOM_LEFT:
         uf = rw * (-x / y + 1.0);
         vf = rh * (-z / y + 1.0);
         break;
