@@ -28,8 +28,8 @@
 
 enum Projections {
     EQUIRECTANGULAR,
-    CUBEMAP_6_1,
     CUBEMAP_3_2,
+    CUBEMAP_6_1,
     NB_PROJECTIONS,
 };
 
@@ -78,12 +78,12 @@ typedef struct PanoramaContext {
 static const AVOption panorama_options[] = {
     {    "input", "set input projection",         OFFSET(in), AV_OPT_TYPE_INT,   {.i64=EQUIRECTANGULAR}, 0,    NB_PROJECTIONS-1, FLAGS, "in" },
     {        "e", "equirectangular",                       0, AV_OPT_TYPE_CONST, {.i64=EQUIRECTANGULAR}, 0,                   0, FLAGS, "in" },
-    {     "c6x1", "cubemap6x1",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "in" },
     {     "c3x2", "cubemap3x2",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_3_2},     0,                   0, FLAGS, "in" },
+    {     "c6x1", "cubemap6x1",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "in" },
     {   "output", "set output projection",       OFFSET(out), AV_OPT_TYPE_INT,   {.i64=CUBEMAP_3_2},     0,    NB_PROJECTIONS-1, FLAGS, "out" },
     {        "e", "equirectangular",                       0, AV_OPT_TYPE_CONST, {.i64=EQUIRECTANGULAR}, 0,                   0, FLAGS, "out" },
-    {     "c6x1", "cubemap6x1",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "out" },
     {     "c3x2", "cubemap3x2",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_3_2},     0,                   0, FLAGS, "out" },
+    {     "c6x1", "cubemap6x1",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "out" },
     {   "interp", "set interpolation method", OFFSET(interp), AV_OPT_TYPE_INT,   {.i64=BILINEAR},        0, NB_INTERP_METHODS-1, FLAGS, "interp" },
     {     "near", "nearest neighbour",                     0, AV_OPT_TYPE_CONST, {.i64=NEAREST},         0,                   0, FLAGS, "interp" },
     {     "line", "bilinear",                              0, AV_OPT_TYPE_CONST, {.i64=BILINEAR},        0,                   0, FLAGS, "interp" },
@@ -182,25 +182,15 @@ static void cube3x2_to_xyz(int i, int j, int width, int height,
     double l_x, l_y, l_z;
 
     switch (face) {
-    case BOTTOM_RIGHT:
-        l_x =  5. - a;
-        l_y =  3. - b;
-        l_z =  1.    ;
+    case TOP_LEFT:
+        l_x =  1.    ;
+        l_y =  1. - b;
+        l_z = -1. + a;
         break;
     case TOP_MIDDLE:
         l_x = -1.    ;
         l_y =  1. - b;
         l_z = -a  + 3;
-        break;
-    case BOTTOM_MIDDLE:
-        l_x =  a  - 3;
-        l_y =  3. - b;
-        l_z = -1.    ;
-        break;
-    case TOP_LEFT:
-        l_x =  1.    ;
-        l_y =  1. - b;
-        l_z = -1. + a;
         break;
     case TOP_RIGHT:
         l_x =  a  - 5;
@@ -211,6 +201,16 @@ static void cube3x2_to_xyz(int i, int j, int width, int height,
         l_x =  a  - 1;
         l_y = -1     ;
         l_z =  b  - 3;
+        break;
+    case BOTTOM_MIDDLE:
+        l_x =  a  - 3;
+        l_y =  3. - b;
+        l_z = -1.    ;
+        break;
+    case BOTTOM_RIGHT:
+        l_x =  5. - a;
+        l_y =  3. - b;
+        l_z =  1.    ;
         break;
     }
 
@@ -255,29 +255,29 @@ static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
     }
 
     switch (face) {
-    case TOP_MIDDLE:
-        uf = rw * ( z / x + 1.0);
-        vf = rh * ( y / x + 1.0);
-        break;
-    case BOTTOM_MIDDLE:
-        uf = rw * (-x / z + 1.0);
-        vf = rh * ( y / z + 1.0);
-        break;
     case TOP_LEFT:
         uf = rw * ( z / x + 1.0);
         vf = rh * (-y / x + 1.0);
+        break;
+    case TOP_MIDDLE:
+        uf = rw * ( z / x + 1.0);
+        vf = rh * ( y / x + 1.0);
         break;
     case TOP_RIGHT:
         uf = rw * ( x / y + 1.0);
         vf = rh * (-z / y + 1.0);
         break;
-    case BOTTOM_RIGHT:
-        uf = rw * (-x / z + 1.0);
-        vf = rh * (-y / z + 1.0);
-        break;
     case BOTTOM_LEFT:
         uf = rw * (-x / y + 1.0);
         vf = rh * (-z / y + 1.0);
+        break;
+    case BOTTOM_MIDDLE:
+        uf = rw * (-x / z + 1.0);
+        vf = rh * ( y / z + 1.0);
+        break;
+    case BOTTOM_RIGHT:
+        uf = rw * (-x / z + 1.0);
+        vf = rh * (-y / z + 1.0);
         break;
     }
 
@@ -310,25 +310,15 @@ static void cube6x1_to_xyz(int i, int j, int width, int height,
     double l_x, l_y, l_z;
 
     switch (face) {
-    case BOTTOM_RIGHT:
-        l_x = 11. - a;
+    case TOP_LEFT:
+        l_x =  1     ;
         l_y =  1. - b;
-        l_z =  1.    ;
+        l_z = -1. + a;
         break;
     case TOP_MIDDLE:
         l_x = -1.    ;
         l_y =  1. - b;
         l_z = -a  + 3;
-        break;
-    case BOTTOM_MIDDLE:
-        l_x =  a  - 9;
-        l_y =  1. - b;
-        l_z = -1.    ;
-        break;
-    case TOP_LEFT:
-        l_x =  1     ;
-        l_y =  1. - b;
-        l_z = -1. + a;
         break;
     case TOP_RIGHT:
         l_x =  a  - 5;
@@ -339,6 +329,16 @@ static void cube6x1_to_xyz(int i, int j, int width, int height,
         l_x =  a  - 7;
         l_y = -1.    ;
         l_z =  b  - 1;
+        break;
+    case BOTTOM_MIDDLE:
+        l_x =  a  - 9;
+        l_y =  1. - b;
+        l_z = -1.    ;
+        break;
+    case BOTTOM_RIGHT:
+        l_x = 11. - a;
+        l_y =  1. - b;
+        l_z =  1.    ;
         break;
     }
 
@@ -384,29 +384,29 @@ static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
 
 
     switch (face) {
-    case TOP_MIDDLE:
-        uf = rw * ( z / x + 1.0);
-        vf = rh * ( y / x + 1.0);
-        break;
-    case BOTTOM_MIDDLE:
-        uf = rw * (-x / z + 1.0);
-        vf = rh * ( y / z + 1.0);
-        break;
     case TOP_LEFT:
         uf = rw * ( z / x + 1.0);
         vf = rh * (-y / x + 1.0);
+        break;
+    case TOP_MIDDLE:
+        uf = rw * ( z / x + 1.0);
+        vf = rh * ( y / x + 1.0);
         break;
     case TOP_RIGHT:
         uf = rw * ( x / y + 1.0);
         vf = rh * (-z / y + 1.0);
         break;
-    case BOTTOM_RIGHT:
-        uf = rw * (-x / z + 1.0);
-        vf = rh * (-y / z + 1.0);
-        break;
     case BOTTOM_LEFT:
         uf = rw * (-x / y + 1.0);
         vf = rh * (-z / y + 1.0);
+        break;
+    case BOTTOM_MIDDLE:
+        uf = rw * (-x / z + 1.0);
+        vf = rh * ( y / z + 1.0);
+        break;
+    case BOTTOM_RIGHT:
+        uf = rw * (-x / z + 1.0);
+        vf = rh * (-y / z + 1.0);
         break;
     }
 
