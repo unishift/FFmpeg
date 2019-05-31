@@ -30,6 +30,7 @@ enum Projections {
     EQUIRECTANGULAR,
     CUBEMAP_3_2,
     CUBEMAP_6_1,
+    EQUIANGULAR,
     NB_PROJECTIONS,
 };
 
@@ -80,10 +81,12 @@ static const AVOption panorama_options[] = {
     {        "e", "equirectangular",                       0, AV_OPT_TYPE_CONST, {.i64=EQUIRECTANGULAR}, 0,                   0, FLAGS, "in" },
     {     "c3x2", "cubemap3x2",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_3_2},     0,                   0, FLAGS, "in" },
     {     "c6x1", "cubemap6x1",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "in" },
+    {      "eac", "equi-angular",                          0, AV_OPT_TYPE_CONST, {.i64=EQUIANGULAR},     0,                   0, FLAGS, "in" },
     {   "output", "set output projection",       OFFSET(out), AV_OPT_TYPE_INT,   {.i64=CUBEMAP_3_2},     0,    NB_PROJECTIONS-1, FLAGS, "out" },
     {        "e", "equirectangular",                       0, AV_OPT_TYPE_CONST, {.i64=EQUIRECTANGULAR}, 0,                   0, FLAGS, "out" },
     {     "c3x2", "cubemap3x2",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_3_2},     0,                   0, FLAGS, "out" },
     {     "c6x1", "cubemap6x1",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "out" },
+    {      "eac", "equi-angular",                          0, AV_OPT_TYPE_CONST, {.i64=EQUIANGULAR},     0,                   0, FLAGS, "out" },
     {   "interp", "set interpolation method", OFFSET(interp), AV_OPT_TYPE_INT,   {.i64=BILINEAR},        0, NB_INTERP_METHODS-1, FLAGS, "interp" },
     {     "near", "nearest neighbour",                     0, AV_OPT_TYPE_CONST, {.i64=NEAREST},         0,                   0, FLAGS, "interp" },
     {     "line", "bilinear",                              0, AV_OPT_TYPE_CONST, {.i64=BILINEAR},        0,                   0, FLAGS, "interp" },
@@ -466,6 +469,133 @@ static void xyz_to_equirect(double x, double y, double z, int width, int height,
     *i2 = u2 % width;
 }
 
+static void eac_to_xyz(int i, int j, int width, int height,
+                       double *x, double *y, double *z)
+{
+    int ew = width / 3;
+    int eh = height / 2;
+    int face = (i / ew) + 3 * (j / eh);
+    double a = 0.5 * tan(M_PI_2 * ((double)(i % ew) / ew - 0.5));
+    double b = 0.5 * tan(M_PI_2 * ((double)(j % eh) / eh - 0.5));
+    double norm;
+    double l_x, l_y, l_z;
+
+    switch (face) {
+    case TOP_LEFT:      // left
+        l_x = -0.5;
+        l_y = -b;
+        l_z = -a;
+        break;
+    case TOP_MIDDLE:    // forward
+        l_x =  a;
+        l_y = -b;
+        l_z = -0.5;
+        break;
+    case TOP_RIGHT:     // right
+        l_x =  0.5;
+        l_y = -b;
+        l_z =  a;
+        break;
+    case BOTTOM_LEFT:   // down
+        l_x = -b;
+        l_y = -0.5;
+        l_z =  a;
+        break;
+    case BOTTOM_MIDDLE: // back
+        l_x = -b;
+        l_y =  a;
+        l_z =  0.5    ;
+        break;
+    case BOTTOM_RIGHT:  // up
+        l_x = -b;
+        l_y =  0.5;
+        l_z = -a;
+        break;
+    }
+
+    norm = sqrt(l_x * l_x + l_y * l_y + l_z * l_z);
+    *x = l_x / norm;
+    *y = l_y / norm;
+    *z = l_z / norm;
+}
+
+static void xyz_to_eac(double x, double y, double z, int width, int height,
+                       int *i, int *j, int *i2, int *j2, double *mu, double *nu)
+{
+    double phi_norm, theta_threshold;
+    double res = M_PI_4 / (width / 3) / 10.0;
+    double uf, vf;
+    double rh = height / 2.0;
+    double rw = width / 3.0;
+    int ui, vi, u2, v2;
+    int face;
+    double phi   = atan2(x, -z);
+    double theta = asin(-y);
+
+    if (in_range(phi, -M_PI_4, M_PI_4, res)) {                      // forward
+        face = TOP_MIDDLE;
+        phi_norm = phi;
+    } else if (in_range(phi, -(M_PI_2 + M_PI_4), -M_PI_4, res)) {   // left
+        face = TOP_LEFT;
+        phi_norm = phi + M_PI_2;
+    } else if (in_range(phi, M_PI_4, M_PI_2 + M_PI_4, res)) {       // right
+        face = TOP_RIGHT;
+        phi_norm = phi - M_PI_2;
+    } else {                                                        // back
+        face = BOTTOM_MIDDLE;
+        phi_norm = phi + ((phi > 0) ? -M_PI : M_PI);
+    }
+
+    theta_threshold = atan2(1., 1. / cos(phi_norm));
+    if (theta > theta_threshold) {                                  // down
+        face = BOTTOM_LEFT;
+    } else if (theta < -theta_threshold) {                          // up
+        face = BOTTOM_RIGHT;
+    }
+
+    switch (face) {
+    case TOP_LEFT:
+        uf = rw * (M_2_PI * atan( z / x) + 0.5);
+        vf = rh * (M_2_PI * atan( y / x) + 0.5);
+        break;
+    case TOP_MIDDLE:
+        uf = rw * (M_2_PI * atan(-x / z) + 0.5);
+        vf = rh * (M_2_PI * atan( y / z) + 0.5);
+        break;
+    case TOP_RIGHT:
+        uf = rw * (M_2_PI * atan( z / x) + 0.5);
+        vf = rh * (M_2_PI * atan(-y / x) + 0.5);
+        break;
+    case BOTTOM_LEFT:
+        uf = rw * (M_2_PI * atan(-z / y) + 0.5);
+        vf = rh * (M_2_PI * atan( x / y) + 0.5);
+        break;
+    case BOTTOM_MIDDLE:
+        uf = rw * (M_2_PI * atan( y / z) + 0.5);
+        vf = rh * (M_2_PI * atan(-x / z) + 0.5);
+        break;
+    case BOTTOM_RIGHT:
+        uf = rw * (M_2_PI * atan(-z / y) + 0.5);
+        vf = rh * (M_2_PI * atan(-x / y) + 0.5);
+        break;
+    }
+
+    ui = floor(uf);
+    vi = floor(vf);
+    u2 = ui + 1;
+    v2 = vi + 1;
+    *mu = uf - ui;
+    *nu = vf - vi;
+    vi = av_clip(vi, 0, rh - 1);
+    ui = av_clip(ui, 0, rw - 1);
+    v2 = av_clip(v2, 0, rh - 1);
+    u2 = av_clip(u2, 0, rw - 1);
+
+    *i  = ui + (width / 3.) * (face % 3);
+    *i2 = u2 + (width / 3.) * (face % 3);
+    *j  = vi + (height / 2.) * (face / 3);
+    *j2 = v2 + (height / 2.) * (face / 3);
+}
 
 static int config_output(AVFilterLink *outlink)
 {
@@ -496,6 +626,7 @@ static int config_output(AVFilterLink *outlink)
         h = inlink->h;
         break;
     case CUBEMAP_3_2:
+    case EQUIANGULAR:
         w = inlink->w / 3 * 4;
         h = inlink->h;
         break;
@@ -511,6 +642,7 @@ static int config_output(AVFilterLink *outlink)
     case EQUIRECTANGULAR:
         break;
     case CUBEMAP_3_2:
+    case EQUIANGULAR:
         w = w / 4 * 3;
         break;
     case CUBEMAP_6_1:
@@ -551,6 +683,9 @@ static int config_output(AVFilterLink *outlink)
     case CUBEMAP_6_1:
         in_transform = xyz_to_cube6x1;
         break;
+    case EQUIANGULAR:
+        in_transform = xyz_to_eac;
+        break;
     }
 
     switch (s->out) {
@@ -562,6 +697,9 @@ static int config_output(AVFilterLink *outlink)
         break;
     case CUBEMAP_6_1:
         out_transform = cube6x1_to_xyz;
+        break;
+    case EQUIANGULAR:
+        out_transform = eac_to_xyz;
         break;
     }
 
