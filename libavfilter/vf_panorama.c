@@ -622,11 +622,11 @@ static int config_output(AVFilterLink *outlink)
 
     switch (s->in) {
     case EQUIRECTANGULAR:
+    case EQUIANGULAR:
         w = inlink->w;
         h = inlink->h;
         break;
     case CUBEMAP_3_2:
-    case EQUIANGULAR:
         w = inlink->w / 3 * 4;
         h = inlink->h;
         break;
@@ -640,9 +640,9 @@ static int config_output(AVFilterLink *outlink)
 
     switch (s->out) {
     case EQUIRECTANGULAR:
+    case EQUIANGULAR:
         break;
     case CUBEMAP_3_2:
-    case EQUIANGULAR:
         w = w / 4 * 3;
         break;
     case CUBEMAP_6_1:
