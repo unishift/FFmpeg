@@ -604,6 +604,7 @@ static int config_output(AVFilterLink *outlink)
     PanoramaContext *s = ctx->priv;
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(inlink->format);
     int p, h, w;
+    double hf, wf;
     void (*in_transform)(double x, double y, double z, int width, int height,
                          int *i, int *j, int *i2, int *j2, double *mu, double *nu);
     void (*out_transform)(int i, int j, int width, int height,
@@ -623,16 +624,16 @@ static int config_output(AVFilterLink *outlink)
     switch (s->in) {
     case EQUIRECTANGULAR:
     case EQUIANGULAR:
-        w = inlink->w;
-        h = inlink->h;
+        wf = inlink->w;
+        hf = inlink->h;
         break;
     case CUBEMAP_3_2:
-        w = inlink->w / 3 * 4;
-        h = inlink->h;
+        wf = inlink->w / 3. * 4.;
+        hf = inlink->h;
         break;
     case CUBEMAP_6_1:
-        w = inlink->w / 3 * 2;
-        h = inlink->h * 2;
+        wf = inlink->w / 3. * 2.;
+        hf = inlink->h * 2.;
         break;
     default:
         av_assert0(0);
@@ -641,13 +642,16 @@ static int config_output(AVFilterLink *outlink)
     switch (s->out) {
     case EQUIRECTANGULAR:
     case EQUIANGULAR:
+        w = wf;
+        h = hf;
         break;
     case CUBEMAP_3_2:
-        w = w / 4 * 3;
+        w = wf / 4. * 3.;
+        h = hf;
         break;
     case CUBEMAP_6_1:
-        w = w / 2 * 3;
-        h = h / 2;
+        w = wf / 2. * 3.;
+        h = hf / 2.;
         break;
     default:
         av_assert0(0);
