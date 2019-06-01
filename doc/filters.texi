@@ -13403,6 +13403,8 @@ Equirectangular projection.
 Cubemap with 6x1 layout.
 @item c3x2
 Cubemap with 3x2 layout.
+@item eac
+Equi-Angular Cubemap.
 
 @end table
 
