@@ -179,41 +179,41 @@ static void cube3x2_to_xyz(int i, int j, int width, int height,
     int ew = width / 3;
     int eh = height / 2;
     int face = (i / ew) + 3 * (j / eh);
-    double a = 2. * i / ew;
-    double b = 2. * j / eh;
+    double a = 2. * (i % ew) / ew - 1.;
+    double b = 2. * (j % eh) / eh - 1.;
     double norm;
     double l_x, l_y, l_z;
 
     switch (face) {
-    case TOP_LEFT:
-        l_x =  1.    ;
-        l_y =  1. - b;
-        l_z = -1. + a;
+    case TOP_LEFT:      // right
+        l_x =  1.;
+        l_y = -b;
+        l_z =  a;
         break;
-    case TOP_MIDDLE:
-        l_x = -1.    ;
-        l_y =  1. - b;
-        l_z = -a  + 3;
+    case TOP_MIDDLE:    // left
+        l_x = -1.;
+        l_y = -b;
+        l_z = -a;
         break;
-    case TOP_RIGHT:
-        l_x =  a  - 5;
-        l_y =  1     ;
-        l_z = -b  + 1;
+    case TOP_RIGHT:     // up
+        l_x =  a;
+        l_y =  1.;
+        l_z = -b;
         break;
-    case BOTTOM_LEFT:
-        l_x =  a  - 1;
-        l_y = -1     ;
-        l_z =  b  - 3;
+    case BOTTOM_LEFT:   // down
+        l_x =  a;
+        l_y = -1.;
+        l_z =  b;
         break;
-    case BOTTOM_MIDDLE:
-        l_x =  a  - 3;
-        l_y =  3. - b;
-        l_z = -1.    ;
+    case BOTTOM_MIDDLE: // front
+        l_x =  a;
+        l_y = -b;
+        l_z = -1.;
         break;
-    case BOTTOM_RIGHT:
-        l_x =  5. - a;
-        l_y =  3. - b;
-        l_z =  1.    ;
+    case BOTTOM_RIGHT:  // back
+        l_x = -a;
+        l_y = -b;
+        l_z =  1.;
         break;
     }
 
@@ -307,41 +307,41 @@ static void cube6x1_to_xyz(int i, int j, int width, int height,
     int ew = width / 6;
     int eh = height;
     int face = i / ew;
-    double a = 2. * i / ew;
-    double b = 2. * j / eh;
+    double a = 2. * (i % ew) / ew - 1.;
+    double b = 2. * (j % eh) / eh - 1.;
     double norm;
     double l_x, l_y, l_z;
 
     switch (face) {
-    case TOP_LEFT:
-        l_x =  1     ;
-        l_y =  1. - b;
-        l_z = -1. + a;
+    case TOP_LEFT:      // right
+        l_x =  1.;
+        l_y = -b;
+        l_z =  a;
         break;
-    case TOP_MIDDLE:
-        l_x = -1.    ;
-        l_y =  1. - b;
-        l_z = -a  + 3;
+    case TOP_MIDDLE:    // left
+        l_x = -1.;
+        l_y = -b;
+        l_z = -a;
         break;
-    case TOP_RIGHT:
-        l_x =  a  - 5;
-        l_y =  1.    ;
-        l_z = -b  + 1;
+    case TOP_RIGHT:     // up
+        l_x =  a;
+        l_y =  1.;
+        l_z = -b;
         break;
-    case BOTTOM_LEFT:
-        l_x =  a  - 7;
-        l_y = -1.    ;
-        l_z =  b  - 1;
+    case BOTTOM_LEFT:   // down
+        l_x =  a;
+        l_y = -1.;
+        l_z =  b;
         break;
-    case BOTTOM_MIDDLE:
-        l_x =  a  - 9;
-        l_y =  1. - b;
-        l_z = -1.    ;
+    case BOTTOM_MIDDLE: // front
+        l_x =  a;
+        l_y = -b;
+        l_z = -1.;
         break;
-    case BOTTOM_RIGHT:
-        l_x = 11. - a;
-        l_y =  1. - b;
-        l_z =  1.    ;
+    case BOTTOM_RIGHT:  // back
+        l_x = -a;
+        l_y = -b;
+        l_z =  1.;
         break;
     }
 
