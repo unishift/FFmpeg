@@ -47,6 +47,17 @@ enum Faces {
     BOTTOM_LEFT,
     BOTTOM_MIDDLE,
     BOTTOM_RIGHT,
+    NB_FACES,
+};
+
+enum Direction {
+    RIGHT,
+    LEFT,
+    UP,
+    DOWN,
+    FRONT,
+    BACK,
+    NB_DIRECTIONS,
 };
 
 struct XYRemap {
@@ -59,6 +70,8 @@ typedef struct PanoramaContext {
     const AVClass *class;
     int in, out;
     int interp;
+    char* in_forder;
+    char* out_forder;
 
     int planewidth[4], planeheight[4];
     int inplanewidth[4], inplaneheight[4];
@@ -77,19 +90,21 @@ typedef struct PanoramaContext {
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
 
 static const AVOption panorama_options[] = {
-    {    "input", "set input projection",         OFFSET(in), AV_OPT_TYPE_INT,   {.i64=EQUIRECTANGULAR}, 0,    NB_PROJECTIONS-1, FLAGS, "in" },
-    {        "e", "equirectangular",                       0, AV_OPT_TYPE_CONST, {.i64=EQUIRECTANGULAR}, 0,                   0, FLAGS, "in" },
-    {     "c3x2", "cubemap3x2",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_3_2},     0,                   0, FLAGS, "in" },
-    {     "c6x1", "cubemap6x1",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "in" },
-    {      "eac", "equi-angular",                          0, AV_OPT_TYPE_CONST, {.i64=EQUIANGULAR},     0,                   0, FLAGS, "in" },
-    {   "output", "set output projection",       OFFSET(out), AV_OPT_TYPE_INT,   {.i64=CUBEMAP_3_2},     0,    NB_PROJECTIONS-1, FLAGS, "out" },
-    {        "e", "equirectangular",                       0, AV_OPT_TYPE_CONST, {.i64=EQUIRECTANGULAR}, 0,                   0, FLAGS, "out" },
-    {     "c3x2", "cubemap3x2",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_3_2},     0,                   0, FLAGS, "out" },
-    {     "c6x1", "cubemap6x1",                            0, AV_OPT_TYPE_CONST, {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "out" },
-    {      "eac", "equi-angular",                          0, AV_OPT_TYPE_CONST, {.i64=EQUIANGULAR},     0,                   0, FLAGS, "out" },
-    {   "interp", "set interpolation method", OFFSET(interp), AV_OPT_TYPE_INT,   {.i64=BILINEAR},        0, NB_INTERP_METHODS-1, FLAGS, "interp" },
-    {     "near", "nearest neighbour",                     0, AV_OPT_TYPE_CONST, {.i64=NEAREST},         0,                   0, FLAGS, "interp" },
-    {     "line", "bilinear",                              0, AV_OPT_TYPE_CONST, {.i64=BILINEAR},        0,                   0, FLAGS, "interp" },
+    {     "input", "set input projection",              OFFSET(in), AV_OPT_TYPE_INT,    {.i64=EQUIRECTANGULAR}, 0,    NB_PROJECTIONS-1, FLAGS, "in" },
+    {         "e", "equirectangular",                            0, AV_OPT_TYPE_CONST,  {.i64=EQUIRECTANGULAR}, 0,                   0, FLAGS, "in" },
+    {      "c3x2", "cubemap3x2",                                 0, AV_OPT_TYPE_CONST,  {.i64=CUBEMAP_3_2},     0,                   0, FLAGS, "in" },
+    {      "c6x1", "cubemap6x1",                                 0, AV_OPT_TYPE_CONST,  {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "in" },
+    {       "eac", "equi-angular",                               0, AV_OPT_TYPE_CONST,  {.i64=EQUIANGULAR},     0,                   0, FLAGS, "in" },
+    {    "output", "set output projection",            OFFSET(out), AV_OPT_TYPE_INT,    {.i64=CUBEMAP_3_2},     0,    NB_PROJECTIONS-1, FLAGS, "out" },
+    {         "e", "equirectangular",                            0, AV_OPT_TYPE_CONST,  {.i64=EQUIRECTANGULAR}, 0,                   0, FLAGS, "out" },
+    {      "c3x2", "cubemap3x2",                                 0, AV_OPT_TYPE_CONST,  {.i64=CUBEMAP_3_2},     0,                   0, FLAGS, "out" },
+    {      "c6x1", "cubemap6x1",                                 0, AV_OPT_TYPE_CONST,  {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "out" },
+    {       "eac", "equi-angular",                               0, AV_OPT_TYPE_CONST,  {.i64=EQUIANGULAR},     0,                   0, FLAGS, "out" },
+    {    "interp", "set interpolation method",      OFFSET(interp), AV_OPT_TYPE_INT,    {.i64=BILINEAR},        0, NB_INTERP_METHODS-1, FLAGS, "interp" },
+    {      "near", "nearest neighbour",                          0, AV_OPT_TYPE_CONST,  {.i64=NEAREST},         0,                   0, FLAGS, "interp" },
+    {      "line", "bilinear",                                   0, AV_OPT_TYPE_CONST,  {.i64=BILINEAR},        0,                   0, FLAGS, "interp" },
+    { "in_forder", "input cubemap face order",   OFFSET(in_forder), AV_OPT_TYPE_STRING, {.str="rludfb"},        0,     NB_DIRECTIONS-1, FLAGS, "in_forder"},
+    {"out_forder", "output cubemap face order", OFFSET(out_forder), AV_OPT_TYPE_STRING, {.str="rludfb"},        0,     NB_DIRECTIONS-1, FLAGS, "out_forder"},
     { NULL }
 };
 
@@ -173,44 +188,55 @@ static inline int in_range(double rd, double small, double large, double res)
           &&  smaller(rd, large, res);
 }
 
+static int in_cubemap_face_order[6] = {
+    TOP_LEFT,     TOP_MIDDLE,    TOP_RIGHT,
+    BOTTOM_LEFT,  BOTTOM_MIDDLE, BOTTOM_RIGHT,
+};
+
+static int out_cubemap_direction_order[6] = {
+    RIGHT, LEFT,  UP,
+    DOWN,  FRONT, BACK,
+};
+
 static void cube3x2_to_xyz(int i, int j, int width, int height,
                            double *x, double *y, double *z)
 {
     int ew = width / 3;
     int eh = height / 2;
     int face = (i / ew) + 3 * (j / eh);
+    int direction = out_cubemap_direction_order[face];
     double a = 2. * (i % ew) / ew - 1.;
     double b = 2. * (j % eh) / eh - 1.;
     double norm;
     double l_x, l_y, l_z;
 
-    switch (face) {
-    case TOP_LEFT:      // right
+    switch (direction) {
+    case RIGHT:
         l_x =  1.;
         l_y = -b;
         l_z =  a;
         break;
-    case TOP_MIDDLE:    // left
+    case LEFT:
         l_x = -1.;
         l_y = -b;
         l_z = -a;
         break;
-    case TOP_RIGHT:     // up
+    case UP:
         l_x =  a;
         l_y =  1.;
         l_z = -b;
         break;
-    case BOTTOM_LEFT:   // down
+    case DOWN:
         l_x =  a;
         l_y = -1.;
         l_z =  b;
         break;
-    case BOTTOM_MIDDLE: // front
+    case FRONT:
         l_x =  a;
         l_y = -b;
         l_z = -1.;
         break;
-    case BOTTOM_RIGHT:  // back
+    case BACK:
         l_x = -a;
         l_y = -b;
         l_z =  1.;
@@ -232,31 +258,33 @@ static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
     double rh = height / 4.0;
     double rw = width / 6.0;
     int ui, vi, u2, v2;
+    int direction;
     int face;
     double phi   = atan2(x, -z);
     double theta = asin(-y);
 
     if (in_range(phi, -M_PI_4, M_PI_4, res)) {
-        face = BOTTOM_MIDDLE;
+        direction = FRONT;
         phi_norm = phi;
     } else if (in_range(phi, -(M_PI_2 + M_PI_4), -M_PI_4, res)) {
-        face = TOP_MIDDLE;
+        direction = LEFT;
         phi_norm = phi + M_PI_2;
     } else if (in_range(phi, M_PI_4, M_PI_2 + M_PI_4, res)) {
-        face = TOP_LEFT;
+        direction = RIGHT;
         phi_norm = phi - M_PI_2;
     } else {
-        face = BOTTOM_RIGHT;
+        direction = BACK;
         phi_norm = phi + ((phi > 0) ? -M_PI : M_PI);
     }
 
     theta_threshold = atan2(1., 1. / cos(phi_norm));
     if (theta > theta_threshold) {
-        face = BOTTOM_LEFT;
+        direction = DOWN;
     } else if (theta < -theta_threshold) {
-        face = TOP_RIGHT;
+        direction = UP;
     }
 
+    face = in_cubemap_face_order[direction];
     switch (face) {
     case TOP_LEFT:
         uf = rw * ( z / x + 1.0);
@@ -307,38 +335,39 @@ static void cube6x1_to_xyz(int i, int j, int width, int height,
     int ew = width / 6;
     int eh = height;
     int face = i / ew;
+    int direction = out_cubemap_direction_order[face];
     double a = 2. * (i % ew) / ew - 1.;
     double b = 2. * (j % eh) / eh - 1.;
     double norm;
     double l_x, l_y, l_z;
 
-    switch (face) {
-    case TOP_LEFT:      // right
+    switch (direction) {
+    case RIGHT:
         l_x =  1.;
         l_y = -b;
         l_z =  a;
         break;
-    case TOP_MIDDLE:    // left
+    case LEFT:
         l_x = -1.;
         l_y = -b;
         l_z = -a;
         break;
-    case TOP_RIGHT:     // up
+    case UP:
         l_x =  a;
         l_y =  1.;
         l_z = -b;
         break;
-    case BOTTOM_LEFT:   // down
+    case DOWN:
         l_x =  a;
         l_y = -1.;
         l_z =  b;
         break;
-    case BOTTOM_MIDDLE: // front
+    case FRONT:
         l_x =  a;
         l_y = -b;
         l_z = -1.;
         break;
-    case BOTTOM_RIGHT:  // back
+    case BACK:
         l_x = -a;
         l_y = -b;
         l_z =  1.;
@@ -360,32 +389,34 @@ static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
     double rh = height / 2;
     double rw = width / 12;
     int ui, vi, u2, v2;
+    int direction;
     int face;
     double phi   = atan2(x, -z);
     double theta = asin(-y);
 
     if (in_range(phi, -M_PI_4, M_PI_4, res)) {
-        face = BOTTOM_MIDDLE;
+        direction = FRONT;
         phi_norm = phi;
     } else if (in_range(phi, -(M_PI_2 + M_PI_4), -M_PI_4, res)) {
-        face = TOP_MIDDLE;
+        direction = LEFT;
         phi_norm = phi + M_PI_2;
     } else if (in_range(phi, M_PI_4, M_PI_2 + M_PI_4, res)) {
-        face = TOP_LEFT;
+        direction = RIGHT;
         phi_norm = phi - M_PI_2;
     } else {
-        face = BOTTOM_RIGHT;
+        direction = BACK;
         phi_norm = phi + ((phi > 0) ? -M_PI : M_PI);
     }
 
     theta_threshold = atan2(1., 1. / cos(phi_norm));
     if (theta > theta_threshold) {
-        face = BOTTOM_LEFT;
+        direction = DOWN;
     } else if (theta < -theta_threshold) {
-        face = TOP_RIGHT;
+        direction = UP;
     }
 
 
+    face = in_cubemap_face_order[direction];
     switch (face) {
     case TOP_LEFT:
         uf = rw * ( z / x + 1.0);
@@ -597,6 +628,26 @@ static void xyz_to_eac(double x, double y, double z, int width, int height,
     *j2 = v2 + (height / 2.) * (face / 3);
 }
 
+static int get_direction(char c)
+{
+    switch (c) {
+    case 'r':
+        return RIGHT;
+    case 'l':
+        return LEFT;
+    case 'u':
+        return UP;
+    case 'd':
+        return DOWN;
+    case 'f':
+        return FRONT;
+    case 'b':
+        return BACK;
+    default:
+        return NB_DIRECTIONS;
+    }
+}
+
 static int config_output(AVFilterLink *outlink)
 {
     AVFilterContext *ctx = outlink->src;
@@ -706,6 +757,38 @@ static int config_output(AVFilterLink *outlink)
         out_transform = eac_to_xyz;
         break;
     }
+
+    for (int face = 0; face < NB_FACES; face++) {
+        const char c = s->in_forder[face];
+        int direction;
+        if (c == '\0') {
+            av_assert0(0);
+        }
+
+        direction = get_direction(c);
+        if (direction == NB_DIRECTIONS) {
+            av_assert0(0);
+        }
+
+        in_cubemap_face_order[direction] = face;
+    }
+
+    for (int face = 0; face < NB_FACES; face++) {
+        const char c = s->out_forder[face];
+        int direction = get_direction(c);
+
+        if (c == '\0') {
+            av_assert0(0);
+        }
+
+        direction = get_direction(c);
+        if (direction == NB_DIRECTIONS) {
+            av_assert0(0);
+        }
+
+        out_cubemap_direction_order[face] = direction;
+    }
+
 
     for (p = 0; p < s->nb_planes; p++) {
         int ui, vi, u2, v2;
