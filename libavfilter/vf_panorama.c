@@ -60,6 +60,14 @@ enum Direction {
     NB_DIRECTIONS,
 };
 
+enum Rotation {
+    ROT_0,
+    ROT_90,
+    ROT_180,
+    ROT_270,
+    NB_ROTATIONS,
+};
+
 struct XYRemap {
     int vi, ui;
     int v2, u2;
@@ -72,6 +80,8 @@ typedef struct PanoramaContext {
     int interp;
     char* in_forder;
     char* out_forder;
+    char* in_frot;
+    char* out_frot;
 
     int planewidth[4], planeheight[4];
     int inplanewidth[4], inplaneheight[4];
@@ -105,6 +115,8 @@ static const AVOption panorama_options[] = {
     {      "line", "bilinear",                                   0, AV_OPT_TYPE_CONST,  {.i64=BILINEAR},        0,                   0, FLAGS, "interp" },
     { "in_forder", "input cubemap face order",   OFFSET(in_forder), AV_OPT_TYPE_STRING, {.str="rludfb"},        0,     NB_DIRECTIONS-1, FLAGS, "in_forder"},
     {"out_forder", "output cubemap face order", OFFSET(out_forder), AV_OPT_TYPE_STRING, {.str="rludfb"},        0,     NB_DIRECTIONS-1, FLAGS, "out_forder"},
+    {   "in_frot", "input cubemap face rotation",  OFFSET(in_frot), AV_OPT_TYPE_STRING, {.str="000000"},        0,     NB_DIRECTIONS-1, FLAGS, "in_frot"},
+    {  "out_frot", "output cubemap face rotation",OFFSET(out_frot), AV_OPT_TYPE_STRING, {.str="000000"},        0,     NB_DIRECTIONS-1, FLAGS, "out_frot"},
     { NULL }
 };
 
@@ -198,6 +210,16 @@ static int out_cubemap_direction_order[6] = {
     DOWN,  FRONT, BACK,
 };
 
+static int in_cubemap_face_rotation[6] = {
+    ROT_0, ROT_0, ROT_0,
+    ROT_0, ROT_0, ROT_0,
+};
+
+static int out_cubemap_face_rotation[6] = {
+    ROT_0, ROT_0, ROT_0,
+    ROT_0, ROT_0, ROT_0,
+};
+
 static void cube3x2_to_xyz(int i, int j, int width, int height,
                            double *x, double *y, double *z)
 {
@@ -205,40 +227,59 @@ static void cube3x2_to_xyz(int i, int j, int width, int height,
     int eh = height / 2;
     int face = (i / ew) + 3 * (j / eh);
     int direction = out_cubemap_direction_order[face];
-    double a = 2. * (i % ew) / ew - 1.;
-    double b = 2. * (j % eh) / eh - 1.;
-    double norm;
+    double uf = 2. * (i % ew) / ew - 1.;
+    double vf = 2. * (j % eh) / eh - 1.;
+    double norm, tmp;
     double l_x, l_y, l_z;
+
+    switch (out_cubemap_face_rotation[face]) {
+    case ROT_0:
+        break;
+    case ROT_90:
+        tmp = -uf;
+        uf = vf;
+        vf = tmp;
+        break;
+    case ROT_180:
+        uf = -uf;
+        vf = -vf;
+        break;
+    case ROT_270:
+        tmp = uf;
+        uf = -vf;
+        vf = tmp;
+        break;
+    }
 
     switch (direction) {
     case RIGHT:
         l_x =  1.;
-        l_y = -b;
-        l_z =  a;
+        l_y = -vf;
+        l_z =  uf;
         break;
     case LEFT:
         l_x = -1.;
-        l_y = -b;
-        l_z = -a;
+        l_y = -vf;
+        l_z = -uf;
         break;
     case UP:
-        l_x =  a;
+        l_x =  uf;
         l_y =  1.;
-        l_z = -b;
+        l_z = -vf;
         break;
     case DOWN:
-        l_x =  a;
+        l_x =  uf;
         l_y = -1.;
-        l_z =  b;
+        l_z =  vf;
         break;
     case FRONT:
-        l_x =  a;
-        l_y = -b;
+        l_x =  uf;
+        l_y = -vf;
         l_z = -1.;
         break;
     case BACK:
-        l_x = -a;
-        l_y = -b;
+        l_x = -uf;
+        l_y = -vf;
         l_z =  1.;
         break;
     }
@@ -254,7 +295,7 @@ static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
 {
     double phi_norm, theta_threshold;
     double res = M_PI_4 / (width / 3) / 10.0;
-    double uf, vf;
+    double uf, vf, tmp;
     double rh = height / 4.0;
     double rw = width / 6.0;
     int ui, vi, u2, v2;
@@ -312,6 +353,25 @@ static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
         break;
     }
 
+    switch (in_cubemap_face_rotation[face]) {
+    case ROT_0:
+        break;
+    case ROT_90:
+        tmp = -uf;
+        uf = vf;
+        vf = tmp;
+        break;
+    case ROT_180:
+        uf = -uf;
+        vf = -vf;
+        break;
+    case ROT_270:
+        tmp = uf;
+        uf = -vf;
+        vf = tmp;
+        break;
+    }
+
     ui = floor(uf);
     vi = floor(vf);
     u2 = ui + 1;
@@ -336,40 +396,59 @@ static void cube6x1_to_xyz(int i, int j, int width, int height,
     int eh = height;
     int face = i / ew;
     int direction = out_cubemap_direction_order[face];
-    double a = 2. * (i % ew) / ew - 1.;
-    double b = 2. * (j % eh) / eh - 1.;
-    double norm;
+    double uf = 2. * (i % ew) / ew - 1.;
+    double vf = 2. * (j % eh) / eh - 1.;
+    double norm, tmp;
     double l_x, l_y, l_z;
+
+    switch (out_cubemap_face_rotation[face]) {
+    case ROT_0:
+        break;
+    case ROT_90:
+        tmp = -uf;
+        uf = vf;
+        vf = tmp;
+        break;
+    case ROT_180:
+        uf = -uf;
+        vf = -vf;
+        break;
+    case ROT_270:
+        tmp = uf;
+        uf = -vf;
+        vf = tmp;
+        break;
+    }
 
     switch (direction) {
     case RIGHT:
         l_x =  1.;
-        l_y = -b;
-        l_z =  a;
+        l_y = -vf;
+        l_z =  uf;
         break;
     case LEFT:
         l_x = -1.;
-        l_y = -b;
-        l_z = -a;
+        l_y = -vf;
+        l_z = -uf;
         break;
     case UP:
-        l_x =  a;
+        l_x =  uf;
         l_y =  1.;
-        l_z = -b;
+        l_z = -vf;
         break;
     case DOWN:
-        l_x =  a;
+        l_x =  uf;
         l_y = -1.;
-        l_z =  b;
+        l_z =  vf;
         break;
     case FRONT:
-        l_x =  a;
-        l_y = -b;
+        l_x =  uf;
+        l_y = -vf;
         l_z = -1.;
         break;
     case BACK:
-        l_x = -a;
-        l_y = -b;
+        l_x = -uf;
+        l_y = -vf;
         l_z =  1.;
         break;
     }
@@ -385,7 +464,7 @@ static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
 {
     double phi_norm, theta_threshold;
     double res = M_PI_4 / (width / 6) / 10.0;
-    double uf, vf;
+    double uf, vf, tmp;
     double rh = height / 2;
     double rw = width / 12;
     int ui, vi, u2, v2;
@@ -441,6 +520,25 @@ static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
     case BOTTOM_RIGHT:
         uf = rw * (-x / z + 1.0);
         vf = rh * (-y / z + 1.0);
+        break;
+    }
+
+    switch (in_cubemap_face_rotation[face]) {
+    case ROT_0:
+        break;
+    case ROT_90:
+        tmp = -uf;
+        uf = vf;
+        vf = tmp;
+        break;
+    case ROT_180:
+        uf = -uf;
+        vf = -vf;
+        break;
+    case ROT_270:
+        tmp = uf;
+        uf = -vf;
+        vf = tmp;
         break;
     }
 
@@ -648,6 +746,23 @@ static int get_direction(char c)
     }
 }
 
+static int get_rotation(char c)
+{
+    switch (c) {
+        case '0':
+            return ROT_0;
+        case '1':
+            return ROT_90;
+        case '2':
+            return ROT_180;
+        case '3':
+            return ROT_270;
+        default:
+            return NB_ROTATIONS;
+    }
+}
+
+
 static int config_output(AVFilterLink *outlink)
 {
     AVFilterContext *ctx = outlink->src;
@@ -787,6 +902,38 @@ static int config_output(AVFilterLink *outlink)
         }
 
         out_cubemap_direction_order[face] = direction;
+    }
+
+    for (int face = 0; face < NB_FACES; face++) {
+        const char c = s->in_frot[face];
+        int rotation;
+
+        if (c == '\0') {
+            av_assert0(0);
+        }
+
+        rotation = get_rotation(c);
+        if (rotation == NB_ROTATIONS) {
+            av_assert0(0);
+        }
+
+        in_cubemap_face_rotation[face] = rotation;
+    }
+
+    for (int face = 0; face < NB_FACES; face++) {
+        const char c = s->out_frot[face];
+        int rotation;
+
+        if (c == '\0') {
+            av_assert0(0);
+        }
+
+        rotation = get_rotation(c);
+        if (rotation == NB_ROTATIONS) {
+            av_assert0(0);
+        }
+
+        out_cubemap_face_rotation[face] = rotation;
     }
 
 
