@@ -548,7 +548,7 @@ static int get_direction(char c)
     case 'b':
         return BACK;
     default:
-        return NB_DIRECTIONS;
+        return -1;
     }
 }
 
@@ -564,7 +564,7 @@ static int get_rotation(char c)
         case '3':
             return ROT_270;
         default:
-            return NB_ROTATIONS;
+            return -1;
     }
 }
 
@@ -710,7 +710,7 @@ static int config_output(AVFilterLink *outlink)
             }
 
             direction = get_direction(c);
-            if (direction == NB_DIRECTIONS) {
+            if (direction == -1) {
                 av_assert0(0);
             }
 
@@ -742,15 +742,15 @@ static int config_output(AVFilterLink *outlink)
         }
     } else {
         for (int face = 0; face < NB_FACES; face++) {
-                const char c = s->out_forder[face];
-                int direction = get_direction(c);
+            const char c = s->out_forder[face];
+            int direction;
 
-                if (c == '\0') {
-                    av_assert0(0);
-                }
+            if (c == '\0') {
+                av_assert0(0);
+            }
 
-                direction = get_direction(c);
-            if (direction == NB_DIRECTIONS) {
+            direction = get_direction(c);
+            if (direction == -1) {
                 av_assert0(0);
             }
 
@@ -790,7 +790,7 @@ static int config_output(AVFilterLink *outlink)
             }
 
             rotation = get_rotation(c);
-            if (rotation == NB_ROTATIONS) {
+            if (rotation == -1) {
                 av_assert0(0);
             }
 
@@ -830,7 +830,7 @@ static int config_output(AVFilterLink *outlink)
             }
 
             rotation = get_rotation(c);
-            if (rotation == NB_ROTATIONS) {
+            if (rotation == -1) {
                 av_assert0(0);
             }
 
