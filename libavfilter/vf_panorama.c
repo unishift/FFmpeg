@@ -69,9 +69,9 @@ enum Rotation {
 };
 
 struct XYRemap {
-    int vi, ui;
-    int v2, u2;
-    double a, b, c, d;
+    int u[4];
+    int v[4];
+    double ker[4][4];
 };
 
 typedef struct PanoramaContext {
@@ -137,31 +137,6 @@ static int query_formats(AVFilterContext *ctx)
     return ff_set_common_formats(ctx, fmts_list);
 }
 
-static int bilinear(PanoramaContext *s,
-                    const uint8_t *src, uint8_t *dst,
-                    int width, int height,
-                    int in_linesize, int out_linesize,
-                    const struct XYRemap *remap)
-{
-    double A, B, C, D;
-    int x, y;
-
-    for (y = 0; y < height; y++) {
-        uint8_t *d = dst + y * out_linesize;
-        for (x = 0; x < width; x++) {
-            const struct XYRemap *r = &remap[y * width + x];
-
-            A = src[r->vi * in_linesize + r->ui];
-            B = src[r->vi * in_linesize + r->u2];
-            C = src[r->v2 * in_linesize + r->ui];
-            D = src[r->v2 * in_linesize + r->u2];
-            *d++ = round(A * r->a + B * r->b + C * r->c + D * r->d);
-        }
-    }
-
-    return 0;
-}
-
 static int nearest(PanoramaContext *s,
                    const uint8_t *src, uint8_t *dst,
                    int width, int height,
@@ -176,12 +151,52 @@ static int nearest(PanoramaContext *s,
         for (x = 0; x < width; x++) {
             const struct XYRemap *r = &remap[y * width + x];
 
-            A = src[r->vi * in_linesize + r->ui];
+            A = src[r->v[1] * in_linesize + r->u[1]];
             *d++ = A;
         }
     }
 
     return 0;
+}
+
+static void nearest_kernel(double mu, double nu, double kernel[4][4])
+{
+    return;
+}
+
+static int bilinear(PanoramaContext *s,
+                    const uint8_t *src, uint8_t *dst,
+                    int width, int height,
+                    int in_linesize, int out_linesize,
+                    const struct XYRemap *remap)
+{
+    int x, y, i, j;
+
+    for (y = 0; y < height; y++) {
+        uint8_t *d = dst + y * out_linesize;
+        for (x = 0; x < width; x++) {
+            const struct XYRemap *r = &remap[y * width + x];
+            double tmp = 0.;
+
+            for (i = 1; i < 3; i++) {
+                for (j = 1; j < 3; j++) {
+                    tmp += r->ker[i][j] * src[r->v[i] * in_linesize + r->u[j]];
+                }
+            }
+
+            *d++ = round(tmp);
+        }
+    }
+
+    return 0;
+}
+
+static void bilinear_kernel(double mu, double nu, double kernel[4][4])
+{
+    kernel[1][1] = (1 - mu) * (1 - nu);
+    kernel[1][2] =      mu  * (1 - nu);
+    kernel[2][1] = (1 - mu) *      nu;
+    kernel[2][2] =      mu  *      nu;
 }
 
 static inline int equal(double a, double b, double epsilon)
@@ -581,13 +596,16 @@ static int config_output(AVFilterLink *outlink)
                          int *i, int *j, int *i2, int *j2, double *mu, double *nu);
     void (*out_transform)(int i, int j, int width, int height,
                           double *x, double *y, double *z);
+    void (*calculate_kernel)(double mu, double nu, double kernel[4][4]);
 
     switch (s->interp) {
     case NEAREST:
         s->panorama = nearest;
+        calculate_kernel = nearest_kernel;
         break;
     case BILINEAR:
         s->panorama = bilinear;
+        calculate_kernel = bilinear_kernel;
         break;
     default:
         av_assert0(0);
@@ -854,15 +872,12 @@ static int config_output(AVFilterLink *outlink)
 
                 out_transform(i, j, width, height, &x, &y, &z);
                 in_transform(x, y, z, in_width, in_height, &ui, &vi, &u2, &v2, &mu, &nu);
-
-                r->vi = vi;
-                r->ui = ui;
-                r->v2 = v2;
-                r->u2 = u2;
-                r->a = (1 - mu) * (1 - nu);
-                r->b =  mu * (1 - nu);
-                r->c = (1 - mu) * nu;
-                r->d = mu * nu;
+                
+                r->v[1] = vi;
+                r->u[1] = ui;
+                r->v[2] = v2;
+                r->u[2] = u2;
+                calculate_kernel(mu, nu, r->ker);
             }
         }
     }
