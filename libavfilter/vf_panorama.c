@@ -37,6 +37,7 @@ enum Projections {
 enum InterpMethod {
     NEAREST,
     BILINEAR,
+    BICUBIC,
     NB_INTERP_METHODS,
 };
 
@@ -113,6 +114,7 @@ static const AVOption panorama_options[] = {
     {    "interp", "set interpolation method",      OFFSET(interp), AV_OPT_TYPE_INT,    {.i64=BILINEAR},        0, NB_INTERP_METHODS-1, FLAGS, "interp" },
     {      "near", "nearest neighbour",                          0, AV_OPT_TYPE_CONST,  {.i64=NEAREST},         0,                   0, FLAGS, "interp" },
     {      "line", "bilinear",                                   0, AV_OPT_TYPE_CONST,  {.i64=BILINEAR},        0,                   0, FLAGS, "interp" },
+    {      "cube", "bicubic",                                    0, AV_OPT_TYPE_CONST,  {.i64=BICUBIC},         0,                   0, FLAGS, "interp" },
     { "in_forder", "input cubemap face order",   OFFSET(in_forder), AV_OPT_TYPE_STRING, {.str="default"},       0,     NB_DIRECTIONS-1, FLAGS, "in_forder"},
     {"out_forder", "output cubemap face order", OFFSET(out_forder), AV_OPT_TYPE_STRING, {.str="default"},       0,     NB_DIRECTIONS-1, FLAGS, "out_forder"},
     {   "in_frot", "input cubemap face rotation",  OFFSET(in_frot), AV_OPT_TYPE_STRING, {.str="default"},       0,     NB_DIRECTIONS-1, FLAGS, "in_frot"},
@@ -143,7 +145,6 @@ static int nearest(PanoramaContext *s,
                    int in_linesize, int out_linesize,
                    const struct XYRemap *remap)
 {
-    double A;
     int x, y;
 
     for (y = 0; y < height; y++) {
@@ -151,8 +152,7 @@ static int nearest(PanoramaContext *s,
         for (x = 0; x < width; x++) {
             const struct XYRemap *r = &remap[y * width + x];
 
-            A = src[r->v[1] * in_linesize + r->u[1]];
-            *d++ = A;
+            *d++ = src[r->v[1] * in_linesize + r->u[1]];
         }
     }
 
@@ -197,6 +197,60 @@ static void bilinear_kernel(double mu, double nu, double kernel[4][4])
     kernel[1][2] =      mu  * (1 - nu);
     kernel[2][1] = (1 - mu) *      nu;
     kernel[2][2] =      mu  *      nu;
+}
+
+static int bicubic(PanoramaContext *s,
+                   const uint8_t *src, uint8_t *dst,
+                   int width, int height,
+                   int in_linesize, int out_linesize,
+                   const struct XYRemap *remap)
+{
+    int x, y, i, j;
+
+    for (y = 0; y < height; y++) {
+        uint8_t *d = dst + y * out_linesize;
+        for (x = 0; x < width; x++) {
+            const struct XYRemap *r = &remap[y * width + x];
+            double tmp = 0.;
+
+            for (i = 0; i < 4; i++) {
+                for (j = 0; j < 4; j++) {
+                    tmp += r->ker[i][j] * src[r->v[i] * in_linesize + r->u[j]];
+                }
+            }
+
+            *d++ = av_clip(tmp, 0., 255.);
+        }
+    }
+
+    return 0;
+}
+
+static inline void calculate_bicubic_coeffs(double t, double *coeffs)
+{
+    const double tt  = t * t;
+    const double ttt = t * t * t;
+
+    coeffs[0] =    - t / 3. + tt / 2. - ttt / 6.;
+    coeffs[1] = 1. - t / 2. - tt      + ttt / 2.;
+    coeffs[2] =      t      + tt / 2. - ttt / 2.;
+    coeffs[3] =    - t / 6.           + ttt / 6.;
+}
+
+static void bicubic_kernel(double mu, double nu, double kernel[4][4])
+{
+    int i, j;
+    double mu_coeffs[4];
+    double nu_coeffs[4];
+
+    calculate_bicubic_coeffs(mu, mu_coeffs);
+    calculate_bicubic_coeffs(nu, nu_coeffs);
+
+    for (i = 0; i < 4; i++) {
+        for (j = 0; j < 4; j++) {
+            kernel[i][j] = mu_coeffs[j] * nu_coeffs[i];
+        }
+    }
 }
 
 static inline int equal(double a, double b, double epsilon)
@@ -301,7 +355,7 @@ static void cube_to_xyz(double uf, double vf, int face,
 }
 
 static void xyz_to_cube(double x, double y, double z, double res,
-                       double *uf, double *vf, int *face)
+                        double *uf, double *vf, int *face)
 {
     double phi   = atan2(x, -z);
     double theta = asin(-y);
@@ -392,13 +446,15 @@ static void cube3x2_to_xyz(int i, int j, int width, int height,
 }
 
 static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
-                           int *i, int *j, int *i2, int *j2, double *mu, double *nu)
+                           int *us, int *vs, double *mu, double *nu)
 {
     double res = M_PI_4 / (width / 3) / 10.0;
     double uf, vf;
     double rh = height / 4.0;
     double rw = width / 6.0;
-    int ui, vi, u2, v2;
+    int ui, vi;
+    int u_shift, v_shift;
+    int i;
     int face;
 
     xyz_to_cube(x, y, z, res, &uf, &vf, &face);
@@ -407,19 +463,16 @@ static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
 
     ui = floor(uf);
     vi = floor(vf);
-    u2 = ui + 1;
-    v2 = vi + 1;
+
     *mu = uf - ui;
     *nu = vf - vi;
-    vi = av_clip(vi, 0, 2 * rh - 1);
-    ui = av_clip(ui, 0, 2 * rw - 1);
-    v2 = av_clip(v2, 0, 2 * rh - 1);
-    u2 = av_clip(u2, 0, 2 * rw - 1);
 
-    *i  = ui + (width / 3.) * (face % 3);
-    *i2 = u2 + (width / 3.) * (face % 3);
-    *j  = vi + (height / 2.) * (face / 3);
-    *j2 = v2 + (height / 2.) * (face / 3);
+    u_shift = (width / 3.) * (face % 3);
+    v_shift = (height / 2.) * (face / 3);
+    for (i = -1; i < 3; i++) {
+        us[i + 1] = u_shift + av_clip(ui + i, 0, 2 * rw - 1);
+        vs[i + 1] = v_shift + av_clip(vi + i, 0, 2 * rh - 1);
+    }
 }
 
 static void cube6x1_to_xyz(int i, int j, int width, int height,
@@ -435,13 +488,15 @@ static void cube6x1_to_xyz(int i, int j, int width, int height,
 }
 
 static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
-                           int *i, int *j, int *i2, int *j2, double *mu, double *nu)
+                           int *us, int *vs, double *mu, double *nu)
 {
     double res = M_PI_4 / (width / 6) / 10.0;
     double uf, vf;
     double rh = height / 2;
     double rw = width / 12;
-    int ui, vi, u2, v2;
+    int ui, vi;
+    int u_shift;
+    int i;
     int face;
 
     xyz_to_cube(x, y, z, res, &uf, &vf, &face);
@@ -450,19 +505,16 @@ static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
 
     ui = floor(uf);
     vi = floor(vf);
-    u2 = ui + 1;
-    v2 = vi + 1;
+
     *mu = uf - ui;
     *nu = vf - vi;
-    vi = av_clip(vi, 0, 2 * rh - 1);
-    ui = av_clip(ui, 0, 2 * rw - 1);
-    v2 = av_clip(v2, 0, 2 * rh - 1);
-    u2 = av_clip(u2, 0, 2 * rw - 1);
 
-    *i  = ui + (width / 6.) * face;
-    *i2 = u2 + (width / 6.) * face;
-    *j  = vi;
-    *j2 = v2;
+    u_shift = (width / 6.) * face;
+    for (i = -1; i < 3; i++) {
+        us[i + 1] = u_shift + av_clip(ui + i, 0, 2 * rw - 1);
+        vs[i + 1] =           av_clip(vi + i, 0, 2 * rh - 1);
+
+    }
 }
 
 static void equirect_to_xyz(int i, int j, int width, int height,
@@ -482,10 +534,11 @@ static void equirect_to_xyz(int i, int j, int width, int height,
 }
 
 static void xyz_to_equirect(double x, double y, double z, int width, int height,
-                            int *i, int *j, int *i2, int *j2, double *mu, double *nu)
+                            int *us, int *vs, double *mu, double *nu)
 {
     double uf, vf;
-    int ui, vi, u2, v2;
+    int ui, vi;
+    int i;
     double phi   = atan2(x, -z);
     double theta = asin(-y);
 
@@ -493,15 +546,15 @@ static void xyz_to_equirect(double x, double y, double z, int width, int height,
     vf = (theta / M_PI_2 + 1.) * height / 2.;
     ui = floor(uf);
     vi = floor(vf);
-    u2 = ui + 1;
-    v2 = vi + 1;
 
     *mu = uf - ui;
     *nu = vf - vi;
-    *j  = av_clip(vi, 0, height - 1);
-    *i  = ui % width;
-    *j2 = av_clip(v2, 0, height - 1);
-    *i2 = u2 % width;
+
+    for (i = -1; i < 3; i++) {
+        us[i + 1] = (ui + i) % width;
+        vs[i + 1] = av_clip(vi + i, 0, height - 1);
+
+    }
 }
 
 static void eac_to_xyz(int i, int j, int width, int height,
@@ -517,13 +570,15 @@ static void eac_to_xyz(int i, int j, int width, int height,
 }
 
 static void xyz_to_eac(double x, double y, double z, int width, int height,
-                       int *i, int *j, int *i2, int *j2, double *mu, double *nu)
+                       int *us, int *vs, double *mu, double *nu)
 {
     double res = M_PI_4 / (width / 3) / 10.0;
     double uf, vf;
     double rh = height / 2.0;
     double rw = width / 3.0;
-    int ui, vi, u2, v2;
+    int ui, vi;
+    int i;
+    int u_shift, v_shift;
     int face;
 
     xyz_to_cube(x, y, z, res, &uf, &vf, &face);
@@ -532,19 +587,16 @@ static void xyz_to_eac(double x, double y, double z, int width, int height,
 
     ui = floor(uf);
     vi = floor(vf);
-    u2 = ui + 1;
-    v2 = vi + 1;
+
     *mu = uf - ui;
     *nu = vf - vi;
-    vi = av_clip(vi, 0, rh - 1);
-    ui = av_clip(ui, 0, rw - 1);
-    v2 = av_clip(v2, 0, rh - 1);
-    u2 = av_clip(u2, 0, rw - 1);
 
-    *i  = ui + (width / 3.) * (face % 3);
-    *i2 = u2 + (width / 3.) * (face % 3);
-    *j  = vi + (height / 2.) * (face / 3);
-    *j2 = v2 + (height / 2.) * (face / 3);
+    u_shift = (width / 3.) * (face % 3);
+    v_shift = (height / 2.) * (face / 3);
+    for (i = -1; i < 3; i++) {
+        us[i + 1] = u_shift + av_clip(ui + i, 0, rw - 1);
+        vs[i + 1] = v_shift + av_clip(vi + i, 0, rh - 1);
+    }
 }
 
 static int get_direction(char c)
@@ -593,7 +645,7 @@ static int config_output(AVFilterLink *outlink)
     int p, h, w;
     double hf, wf;
     void (*in_transform)(double x, double y, double z, int width, int height,
-                         int *i, int *j, int *i2, int *j2, double *mu, double *nu);
+                         int *us, int *vs, double *mu, double *nu);
     void (*out_transform)(int i, int j, int width, int height,
                           double *x, double *y, double *z);
     void (*calculate_kernel)(double mu, double nu, double kernel[4][4]);
@@ -606,6 +658,10 @@ static int config_output(AVFilterLink *outlink)
     case BILINEAR:
         s->panorama = bilinear;
         calculate_kernel = bilinear_kernel;
+        break;
+    case BICUBIC:
+        s->panorama = bicubic;
+        calculate_kernel = bicubic_kernel;
         break;
     default:
         av_assert0(0);
@@ -858,7 +914,6 @@ static int config_output(AVFilterLink *outlink)
 
 
     for (p = 0; p < s->nb_planes; p++) {
-        int ui, vi, u2, v2;
         double mu, nu, x, y, z;
         int width = s->planewidth[p];
         int height = s->planeheight[p];
@@ -871,12 +926,7 @@ static int config_output(AVFilterLink *outlink)
                 struct XYRemap *r = &s->remap[p][j * width + i];
 
                 out_transform(i, j, width, height, &x, &y, &z);
-                in_transform(x, y, z, in_width, in_height, &ui, &vi, &u2, &v2, &mu, &nu);
-                
-                r->v[1] = vi;
-                r->u[1] = ui;
-                r->v[2] = v2;
-                r->u[2] = u2;
+                in_transform(x, y, z, in_width, in_height, r->u, r->v, &mu, &nu);
                 calculate_kernel(mu, nu, r->ker);
             }
         }
