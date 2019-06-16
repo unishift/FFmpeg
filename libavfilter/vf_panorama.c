@@ -72,7 +72,7 @@ enum Rotation {
 struct XYRemap {
     int u[4];
     int v[4];
-    double ker[4][4];
+    float ker[4][4];
 };
 
 typedef struct PanoramaContext {
@@ -159,7 +159,7 @@ static int nearest(PanoramaContext *s,
     return 0;
 }
 
-static void nearest_kernel(double mu, double nu, double kernel[4][4])
+static void nearest_kernel(float mu, float nu, float kernel[4][4])
 {
     return;
 }
@@ -176,7 +176,7 @@ static int bilinear(PanoramaContext *s,
         uint8_t *d = dst + y * out_linesize;
         for (x = 0; x < width; x++) {
             const struct XYRemap *r = &remap[y * width + x];
-            double tmp = 0.;
+            float tmp = 0.f;
 
             for (i = 1; i < 3; i++) {
                 for (j = 1; j < 3; j++) {
@@ -184,19 +184,19 @@ static int bilinear(PanoramaContext *s,
                 }
             }
 
-            *d++ = round(tmp);
+            *d++ = roundf(tmp);
         }
     }
 
     return 0;
 }
 
-static void bilinear_kernel(double mu, double nu, double kernel[4][4])
+static void bilinear_kernel(float mu, float nu, float kernel[4][4])
 {
-    kernel[1][1] = (1 - mu) * (1 - nu);
-    kernel[1][2] =      mu  * (1 - nu);
-    kernel[2][1] = (1 - mu) *      nu;
-    kernel[2][2] =      mu  *      nu;
+    kernel[1][1] = (1.f - mu) * (1.f - nu);
+    kernel[1][2] =        mu  * (1.f - nu);
+    kernel[2][1] = (1.f - mu) *        nu;
+    kernel[2][2] =        mu  *        nu;
 }
 
 static int bicubic(PanoramaContext *s,
@@ -211,7 +211,7 @@ static int bicubic(PanoramaContext *s,
         uint8_t *d = dst + y * out_linesize;
         for (x = 0; x < width; x++) {
             const struct XYRemap *r = &remap[y * width + x];
-            double tmp = 0.;
+            float tmp = 0.f;
 
             for (i = 0; i < 4; i++) {
                 for (j = 0; j < 4; j++) {
@@ -219,29 +219,29 @@ static int bicubic(PanoramaContext *s,
                 }
             }
 
-            *d++ = av_clip(tmp, 0., 255.);
+            *d++ = av_clip(tmp, 0, 255);
         }
     }
 
     return 0;
 }
 
-static inline void calculate_bicubic_coeffs(double t, double *coeffs)
+static inline void calculate_bicubic_coeffs(float t, float *coeffs)
 {
-    const double tt  = t * t;
-    const double ttt = t * t * t;
+    const float tt  = t * t;
+    const float ttt = t * t * t;
 
-    coeffs[0] =    - t / 3. + tt / 2. - ttt / 6.;
-    coeffs[1] = 1. - t / 2. - tt      + ttt / 2.;
-    coeffs[2] =      t      + tt / 2. - ttt / 2.;
-    coeffs[3] =    - t / 6.           + ttt / 6.;
+    coeffs[0] =     - t / 3.f + tt / 2.f - ttt / 6.f;
+    coeffs[1] = 1.f - t / 2.f - tt       + ttt / 2.f;
+    coeffs[2] =       t       + tt / 2.f - ttt / 2.f;
+    coeffs[3] =     - t / 6.f            + ttt / 6.f;
 }
 
-static void bicubic_kernel(double mu, double nu, double kernel[4][4])
+static void bicubic_kernel(float mu, float nu, float kernel[4][4])
 {
     int i, j;
-    double mu_coeffs[4];
-    double nu_coeffs[4];
+    float mu_coeffs[4];
+    float nu_coeffs[4];
 
     calculate_bicubic_coeffs(mu, mu_coeffs);
     calculate_bicubic_coeffs(nu, nu_coeffs);
@@ -253,17 +253,17 @@ static void bicubic_kernel(double mu, double nu, double kernel[4][4])
     }
 }
 
-static inline int equal(double a, double b, double epsilon)
+static inline int equal(float a, float b, float epsilon)
 {
-    return fabs(a - b) < epsilon;
+    return fabsf(a - b) < epsilon;
 }
 
-static inline int smaller(double a, double b, double epsilon)
+static inline int smaller(float a, float b, float epsilon)
 {
-    return ((a - b) < 0.0) && (!equal(a, b, epsilon));
+    return ((a - b) < 0.f) && (!equal(a, b, epsilon));
 }
 
-static inline int in_range(double rd, double small, double large, double res)
+static inline int in_range(float rd, float small, float large, float res)
 {
    return    !smaller(rd, small, res)
           &&  smaller(rd, large, res);
@@ -289,12 +289,12 @@ static int out_cubemap_face_rotation[6] = {
     ROT_0, ROT_0, ROT_0,
 };
 
-static void cube_to_xyz(double uf, double vf, int face,
-                        double *x, double *y, double *z)
+static void cube_to_xyz(float uf, float vf, int face,
+                        float *x, float *y, float *z)
 {
     int direction = out_cubemap_direction_order[face];
-    double norm, tmp;
-    double l_x, l_y, l_z;
+    float norm, tmp;
+    float l_x, l_y, l_z;
 
     switch (out_cubemap_face_rotation[face]) {
     case ROT_0:
@@ -317,50 +317,50 @@ static void cube_to_xyz(double uf, double vf, int face,
 
     switch (direction) {
     case RIGHT:
-        l_x =  1.;
+        l_x =  1.f;
         l_y = -vf;
         l_z =  uf;
         break;
     case LEFT:
-        l_x = -1.;
+        l_x = -1.f;
         l_y = -vf;
         l_z = -uf;
         break;
     case UP:
         l_x =  uf;
-        l_y =  1.;
+        l_y =  1.f;
         l_z = -vf;
         break;
     case DOWN:
         l_x =  uf;
-        l_y = -1.;
+        l_y = -1.f;
         l_z =  vf;
         break;
     case FRONT:
         l_x =  uf;
         l_y = -vf;
-        l_z = -1.;
+        l_z = -1.f;
         break;
     case BACK:
         l_x = -uf;
         l_y = -vf;
-        l_z =  1.;
+        l_z =  1.f;
         break;
     }
 
-    norm = sqrt(l_x * l_x + l_y * l_y + l_z * l_z);
+    norm = sqrtf(l_x * l_x + l_y * l_y + l_z * l_z);
     *x = l_x / norm;
     *y = l_y / norm;
     *z = l_z / norm;
 }
 
-static void xyz_to_cube(double x, double y, double z, double res,
-                        double *uf, double *vf, int *face)
+static void xyz_to_cube(float x, float y, float z, float res,
+                        float *uf, float *vf, int *face)
 {
-    double phi   = atan2(x, -z);
-    double theta = asin(-y);
-    double phi_norm, theta_threshold;
-    double tmp;
+    float phi   = atan2f(x, -z);
+    float theta = asinf(-y);
+    float phi_norm, theta_threshold;
+    float tmp;
     int direction;
 
     if (in_range(phi, -M_PI_4, M_PI_4, res)) {
@@ -374,10 +374,10 @@ static void xyz_to_cube(double x, double y, double z, double res,
         phi_norm = phi - M_PI_2;
     } else {
         direction = BACK;
-        phi_norm = phi + ((phi > 0) ? -M_PI : M_PI);
+        phi_norm = phi + ((phi > 0.f) ? -M_PI : M_PI);
     }
 
-    theta_threshold = atan2(1., 1. / cos(phi_norm));
+    theta_threshold = atan2f(1.f, 1.f / cosf(phi_norm));
     if (theta > theta_threshold) {
         direction = DOWN;
     } else if (theta < -theta_threshold) {
@@ -434,41 +434,41 @@ static void xyz_to_cube(double x, double y, double z, double res,
 }
 
 static void cube3x2_to_xyz(int i, int j, int width, int height,
-                           double *x, double *y, double *z)
+                           float *x, float *y, float *z)
 {
     int ew = width / 3;
     int eh = height / 2;
     int face = (i / ew) + 3 * (j / eh);
-    double uf = 2. * (i % ew) / ew - 1.;
-    double vf = 2. * (j % eh) / eh - 1.;
+    float uf = 2.f * (i % ew) / ew - 1.f;
+    float vf = 2.f * (j % eh) / eh - 1.f;
 
     cube_to_xyz(uf, vf, face, x, y, z);
 }
 
-static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
-                           int *us, int *vs, double *mu, double *nu)
+static void xyz_to_cube3x2(float x, float y, float z, int width, int height,
+                           int *us, int *vs, float *mu, float *nu)
 {
-    double res = M_PI_4 / (width / 3) / 10.0;
-    double uf, vf;
-    double rh = height / 4.0;
-    double rw = width / 6.0;
+    float res = M_PI_4 / (width / 3) / 10.f;
+    float uf, vf;
+    float rh = height / 4.f;
+    float rw = width / 6.f;
     int ui, vi;
     int u_shift, v_shift;
     int i;
     int face;
 
     xyz_to_cube(x, y, z, res, &uf, &vf, &face);
-    uf = rw * (uf + 1.0);
-    vf = rh * (vf + 1.0);
+    uf = rw * (uf + 1.f);
+    vf = rh * (vf + 1.f);
 
-    ui = floor(uf);
-    vi = floor(vf);
+    ui = floorf(uf);
+    vi = floorf(vf);
 
     *mu = uf - ui;
     *nu = vf - vi;
 
-    u_shift = (width / 3.) * (face % 3);
-    v_shift = (height / 2.) * (face / 3);
+    u_shift = (width  / 3.f) * (face % 3);
+    v_shift = (height / 2.f) * (face / 3);
     for (i = -1; i < 3; i++) {
         us[i + 1] = u_shift + av_clip(ui + i, 0, 2 * rw - 1);
         vs[i + 1] = v_shift + av_clip(vi + i, 0, 2 * rh - 1);
@@ -476,40 +476,40 @@ static void xyz_to_cube3x2(double x, double y, double z, int width, int height,
 }
 
 static void cube6x1_to_xyz(int i, int j, int width, int height,
-                           double *x, double *y, double *z)
+                           float *x, float *y, float *z)
 {
     int ew = width / 6;
     int eh = height;
     int face = i / ew;
-    double uf = 2. * (i % ew) / ew - 1.;
-    double vf = 2. * (j % eh) / eh - 1.;
+    float uf = 2.f * (i % ew) / ew - 1.f;
+    float vf = 2.f * (j % eh) / eh - 1.f;
 
     cube_to_xyz(uf, vf, face, x, y, z);
 }
 
-static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
-                           int *us, int *vs, double *mu, double *nu)
+static void xyz_to_cube6x1(float x, float y, float z, int width, int height,
+                           int *us, int *vs, float *mu, float *nu)
 {
-    double res = M_PI_4 / (width / 6) / 10.0;
-    double uf, vf;
-    double rh = height / 2;
-    double rw = width / 12;
+    float res = M_PI_4 / (width / 6) / 10.f;
+    float uf, vf;
+    float rh = height / 2;
+    float rw = width / 12;
     int ui, vi;
     int u_shift;
     int i;
     int face;
 
     xyz_to_cube(x, y, z, res, &uf, &vf, &face);
-    uf = rw * (uf + 1.0);
-    vf = rh * (vf + 1.0);
+    uf = rw * (uf + 1.f);
+    vf = rh * (vf + 1.f);
 
-    ui = floor(uf);
-    vi = floor(vf);
+    ui = floorf(uf);
+    vi = floorf(vf);
 
     *mu = uf - ui;
     *nu = vf - vi;
 
-    u_shift = (width / 6.) * face;
+    u_shift = (width / 6.f) * face;
     for (i = -1; i < 3; i++) {
         us[i + 1] = u_shift + av_clip(ui + i, 0, 2 * rw - 1);
         vs[i + 1] =           av_clip(vi + i, 0, 2 * rh - 1);
@@ -518,34 +518,34 @@ static void xyz_to_cube6x1(double x, double y, double z, int width, int height,
 }
 
 static void equirect_to_xyz(int i, int j, int width, int height,
-                            double *x, double *y, double *z)
+                            float *x, float *y, float *z)
 {
-    double phi   = ((2. * i) / width  - 1.) * M_PI;
-    double theta = ((2. * j) / height - 1.) * M_PI_2;
+    float phi   = ((2.f * i) / width  - 1.f) * M_PI;
+    float theta = ((2.f * j) / height - 1.f) * M_PI_2;
 
-    const double sin_phi = sin(phi);
-    const double cos_phi = cos(phi);
-    const double sin_theta = sin(theta);
-    const double cos_theta = cos(theta);
+    const float sin_phi   = sinf(phi);
+    const float cos_phi   = cosf(phi);
+    const float sin_theta = sinf(theta);
+    const float cos_theta = cosf(theta);
 
     *x =  cos_theta * sin_phi;
     *y = -sin_theta;
     *z = -cos_theta * cos_phi;
 }
 
-static void xyz_to_equirect(double x, double y, double z, int width, int height,
-                            int *us, int *vs, double *mu, double *nu)
+static void xyz_to_equirect(float x, float y, float z, int width, int height,
+                            int *us, int *vs, float *mu, float *nu)
 {
-    double uf, vf;
+    float uf, vf;
     int ui, vi;
     int i;
-    double phi   = atan2(x, -z);
-    double theta = asin(-y);
+    float phi   = atan2f(x, -z);
+    float theta = asinf(-y);
 
-    uf = (phi / M_PI + 1.) * width / 2.;
-    vf = (theta / M_PI_2 + 1.) * height / 2.;
-    ui = floor(uf);
-    vi = floor(vf);
+    uf = (phi   / M_PI   + 1.f) * width  / 2.f;
+    vf = (theta / M_PI_2 + 1.f) * height / 2.f;
+    ui = floorf(uf);
+    vi = floorf(vf);
 
     *mu = uf - ui;
     *nu = vf - vi;
@@ -558,41 +558,41 @@ static void xyz_to_equirect(double x, double y, double z, int width, int height,
 }
 
 static void eac_to_xyz(int i, int j, int width, int height,
-                       double *x, double *y, double *z)
+                       float *x, float *y, float *z)
 {
     int ew = width / 3;
     int eh = height / 2;
     int face = (i / ew) + 3 * (j / eh);
-    double uf = tan(M_PI_2 * ((double)(i % ew) / ew - 0.5));
-    double vf = tan(M_PI_2 * ((double)(j % eh) / eh - 0.5));
+    float uf = tanf(M_PI_2 * ((float)(i % ew) / ew - 0.5f));
+    float vf = tanf(M_PI_2 * ((float)(j % eh) / eh - 0.5f));
 
     cube_to_xyz(uf, vf, face, x, y, z);
 }
 
-static void xyz_to_eac(double x, double y, double z, int width, int height,
-                       int *us, int *vs, double *mu, double *nu)
+static void xyz_to_eac(float x, float y, float z, int width, int height,
+                       int *us, int *vs, float *mu, float *nu)
 {
-    double res = M_PI_4 / (width / 3) / 10.0;
-    double uf, vf;
-    double rh = height / 2.0;
-    double rw = width / 3.0;
+    float res = M_PI_4 / (width / 3) / 10.f;
+    float uf, vf;
+    float rh = height / 2.f;
+    float rw = width / 3.f;
     int ui, vi;
     int i;
     int u_shift, v_shift;
     int face;
 
     xyz_to_cube(x, y, z, res, &uf, &vf, &face);
-    uf = rw * (M_2_PI * atan(uf) + 0.5);
-    vf = rh * (M_2_PI * atan(vf) + 0.5);
+    uf = rw * (M_2_PI * atanf(uf) + 0.5f);
+    vf = rh * (M_2_PI * atanf(vf) + 0.5f);
 
-    ui = floor(uf);
-    vi = floor(vf);
+    ui = floorf(uf);
+    vi = floorf(vf);
 
     *mu = uf - ui;
     *nu = vf - vi;
 
-    u_shift = (width / 3.) * (face % 3);
-    v_shift = (height / 2.) * (face / 3);
+    u_shift = (width  / 3.f) * (face % 3);
+    v_shift = (height / 2.f) * (face / 3);
     for (i = -1; i < 3; i++) {
         us[i + 1] = u_shift + av_clip(ui + i, 0, rw - 1);
         vs[i + 1] = v_shift + av_clip(vi + i, 0, rh - 1);
@@ -643,12 +643,12 @@ static int config_output(AVFilterLink *outlink)
     PanoramaContext *s = ctx->priv;
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(inlink->format);
     int p, h, w;
-    double hf, wf;
-    void (*in_transform)(double x, double y, double z, int width, int height,
-                         int *us, int *vs, double *mu, double *nu);
+    float hf, wf;
+    void (*in_transform)(float x, float y, float z, int width, int height,
+                         int *us, int *vs, float *mu, float *nu);
     void (*out_transform)(int i, int j, int width, int height,
-                          double *x, double *y, double *z);
-    void (*calculate_kernel)(double mu, double nu, double kernel[4][4]);
+                          float *x, float *y, float *z);
+    void (*calculate_kernel)(float mu, float nu, float kernel[4][4]);
 
     switch (s->interp) {
     case NEAREST:
@@ -674,12 +674,12 @@ static int config_output(AVFilterLink *outlink)
         hf = inlink->h;
         break;
     case CUBEMAP_3_2:
-        wf = inlink->w / 3. * 4.;
+        wf = inlink->w / 3.f * 4.f;
         hf = inlink->h;
         break;
     case CUBEMAP_6_1:
-        wf = inlink->w / 3. * 2.;
-        hf = inlink->h * 2.;
+        wf = inlink->w / 3.f * 2.f;
+        hf = inlink->h * 2.f;
         break;
     default:
         av_assert0(0);
@@ -692,12 +692,12 @@ static int config_output(AVFilterLink *outlink)
         h = hf;
         break;
     case CUBEMAP_3_2:
-        w = wf / 4. * 3.;
+        w = wf / 4.f * 3.f;
         h = hf;
         break;
     case CUBEMAP_6_1:
-        w = wf / 2. * 3.;
-        h = hf / 2.;
+        w = wf / 2.f * 3.f;
+        h = hf / 2.f;
         break;
     default:
         av_assert0(0);
@@ -914,7 +914,7 @@ static int config_output(AVFilterLink *outlink)
 
 
     for (p = 0; p < s->nb_planes; p++) {
-        double mu, nu, x, y, z;
+        float mu, nu, x, y, z;
         int width = s->planewidth[p];
         int height = s->planeheight[p];
         int in_width = s->inplanewidth[p];
