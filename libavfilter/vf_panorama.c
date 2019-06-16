@@ -38,6 +38,7 @@ enum InterpMethod {
     NEAREST,
     BILINEAR,
     BICUBIC,
+    LANCZOS,
     NB_INTERP_METHODS,
 };
 
@@ -115,6 +116,7 @@ static const AVOption panorama_options[] = {
     {      "near", "nearest neighbour",                          0, AV_OPT_TYPE_CONST,  {.i64=NEAREST},         0,                   0, FLAGS, "interp" },
     {      "line", "bilinear",                                   0, AV_OPT_TYPE_CONST,  {.i64=BILINEAR},        0,                   0, FLAGS, "interp" },
     {      "cube", "bicubic",                                    0, AV_OPT_TYPE_CONST,  {.i64=BICUBIC},         0,                   0, FLAGS, "interp" },
+    {      "lanc", "lanczos",                                    0, AV_OPT_TYPE_CONST,  {.i64=LANCZOS},         0,                   0, FLAGS, "interp" },
     { "in_forder", "input cubemap face order",   OFFSET(in_forder), AV_OPT_TYPE_STRING, {.str="default"},       0,     NB_DIRECTIONS-1, FLAGS, "in_forder"},
     {"out_forder", "output cubemap face order", OFFSET(out_forder), AV_OPT_TYPE_STRING, {.str="default"},       0,     NB_DIRECTIONS-1, FLAGS, "out_forder"},
     {   "in_frot", "input cubemap face rotation",  OFFSET(in_frot), AV_OPT_TYPE_STRING, {.str="default"},       0,     NB_DIRECTIONS-1, FLAGS, "in_frot"},
@@ -245,6 +247,70 @@ static void bicubic_kernel(float mu, float nu, float kernel[4][4])
 
     calculate_bicubic_coeffs(mu, mu_coeffs);
     calculate_bicubic_coeffs(nu, nu_coeffs);
+
+    for (i = 0; i < 4; i++) {
+        for (j = 0; j < 4; j++) {
+            kernel[i][j] = mu_coeffs[j] * nu_coeffs[i];
+        }
+    }
+}
+
+static int lanczos(PanoramaContext *s,
+                   const uint8_t *src, uint8_t *dst,
+                   int width, int height,
+                   int in_linesize, int out_linesize,
+                   const struct XYRemap *remap)
+{
+    int x, y, i, j;
+
+    for (y = 0; y < height; y++) {
+        uint8_t *d = dst + y * out_linesize;
+        for (x = 0; x < width; x++) {
+            const struct XYRemap *r = &remap[y * width + x];
+            float tmp = 0.f;
+
+            for (i = 0; i < 4; i++) {
+                for (j = 0; j < 4; j++) {
+                    tmp += r->ker[i][j] * src[r->v[i] * in_linesize + r->u[j]];
+                }
+            }
+
+            *d++ = av_clip(tmp, 0, 255);
+        }
+    }
+
+    return 0;
+
+}
+
+static inline void calculate_lanczos_coeffs(float t, float *coeffs)
+{
+    int i;
+    float sum = 0.f;
+
+    for (i = 0; i < 4; i++) {
+        const float x = M_PI * (t - i + 1);
+        if (x == 0.f) {
+            coeffs[i] = 1.f;
+        } else {
+            coeffs[i] = sinf(x) * sinf(x / 2.f) / (x * x / 2.f);
+        }
+        sum += coeffs[i];
+    }
+
+    for (int i = 0; i < 4; i++) {
+        coeffs[i] /= sum;
+    }
+}
+
+static void lanczos_kernel(float mu, float nu, float kernel[4][4])
+{
+    int i, j;
+    float mu_coeffs[4];
+    float nu_coeffs[4];
+
+    calculate_lanczos_coeffs(mu, mu_coeffs);
+    calculate_lanczos_coeffs(nu, nu_coeffs);
 
     for (i = 0; i < 4; i++) {
         for (j = 0; j < 4; j++) {
@@ -662,6 +728,10 @@ static int config_output(AVFilterLink *outlink)
     case BICUBIC:
         s->panorama = bicubic;
         calculate_kernel = bicubic_kernel;
+        break;
+    case LANCZOS:
+        s->panorama = lanczos;
+        calculate_kernel = lanczos_kernel;
         break;
     default:
         av_assert0(0);
