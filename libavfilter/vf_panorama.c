@@ -335,6 +335,16 @@ static inline int in_range(float rd, float small, float large, float res)
           &&  smaller(rd, large, res);
 }
 
+static inline int mod(int a, int b)
+{
+    const int res = a % b;
+    if (res < 0) {
+        return res + b;
+    } else {
+        return res;
+    }
+}
+
 static int in_cubemap_face_order[6] = {
     TOP_LEFT,     TOP_MIDDLE,    TOP_RIGHT,
     BOTTOM_LEFT,  BOTTOM_MIDDLE, BOTTOM_RIGHT,
@@ -617,7 +627,7 @@ static void xyz_to_equirect(float x, float y, float z, int width, int height,
     *nu = vf - vi;
 
     for (i = -1; i < 3; i++) {
-        us[i + 1] = (ui + i) % width;
+        us[i + 1] = mod(ui + i, width);
         vs[i + 1] = av_clip(vi + i, 0, height - 1);
 
     }
