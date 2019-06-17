@@ -71,8 +71,8 @@ enum Rotation {
 };
 
 struct XYRemap {
-    int u[4];
-    int v[4];
+    uint16_t u[4];
+    uint16_t v[4];
     float ker[4][4];
 };
 
@@ -512,7 +512,7 @@ static void cube3x2_to_xyz(int i, int j, int width, int height,
 }
 
 static void xyz_to_cube3x2(float x, float y, float z, int width, int height,
-                           int *us, int *vs, float *mu, float *nu)
+                           uint16_t *us, uint16_t *vs, float *mu, float *nu)
 {
     float res = M_PI_4 / (width / 3) / 10.f;
     float uf, vf;
@@ -554,7 +554,7 @@ static void cube6x1_to_xyz(int i, int j, int width, int height,
 }
 
 static void xyz_to_cube6x1(float x, float y, float z, int width, int height,
-                           int *us, int *vs, float *mu, float *nu)
+                           uint16_t *us, uint16_t *vs, float *mu, float *nu)
 {
     float res = M_PI_4 / (width / 6) / 10.f;
     float uf, vf;
@@ -600,7 +600,7 @@ static void equirect_to_xyz(int i, int j, int width, int height,
 }
 
 static void xyz_to_equirect(float x, float y, float z, int width, int height,
-                            int *us, int *vs, float *mu, float *nu)
+                            uint16_t *us, uint16_t *vs, float *mu, float *nu)
 {
     float uf, vf;
     int ui, vi;
@@ -636,7 +636,7 @@ static void eac_to_xyz(int i, int j, int width, int height,
 }
 
 static void xyz_to_eac(float x, float y, float z, int width, int height,
-                       int *us, int *vs, float *mu, float *nu)
+                       uint16_t *us, uint16_t *vs, float *mu, float *nu)
 {
     float res = M_PI_4 / (width / 3) / 10.f;
     float uf, vf;
@@ -711,7 +711,7 @@ static int config_output(AVFilterLink *outlink)
     int p, h, w;
     float hf, wf;
     void (*in_transform)(float x, float y, float z, int width, int height,
-                         int *us, int *vs, float *mu, float *nu);
+                         uint16_t *us, uint16_t *vs, float *mu, float *nu);
     void (*out_transform)(int i, int j, int width, int height,
                           float *x, float *y, float *z);
     void (*calculate_kernel)(float mu, float nu, float kernel[4][4]);
