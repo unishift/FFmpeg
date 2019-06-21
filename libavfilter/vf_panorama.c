@@ -85,6 +85,8 @@ typedef struct PanoramaContext {
     char* in_frot;
     char* out_frot;
 
+    float yaw, pitch, roll;
+
     int planewidth[4], planeheight[4];
     int inplanewidth[4], inplaneheight[4];
     int nb_planes;
@@ -121,6 +123,9 @@ static const AVOption panorama_options[] = {
     {"out_forder", "output cubemap face order", OFFSET(out_forder), AV_OPT_TYPE_STRING, {.str="default"},       0,     NB_DIRECTIONS-1, FLAGS, "out_forder"},
     {   "in_frot", "input cubemap face rotation",  OFFSET(in_frot), AV_OPT_TYPE_STRING, {.str="default"},       0,     NB_DIRECTIONS-1, FLAGS, "in_frot"},
     {  "out_frot", "output cubemap face rotation",OFFSET(out_frot), AV_OPT_TYPE_STRING, {.str="default"},       0,     NB_DIRECTIONS-1, FLAGS, "out_frot"},
+    {       "yaw",                 "yaw rotation",     OFFSET(yaw), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},             -M_PI,            M_PI, FLAGS},
+    {     "pitch",               "pitch rotation",   OFFSET(pitch), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},             -M_PI,            M_PI, FLAGS},
+    {      "roll",                "roll rotation",    OFFSET(roll), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},             -M_PI,            M_PI, FLAGS},
     { NULL }
 };
 
@@ -675,6 +680,41 @@ static void xyz_to_eac(float x, float y, float z, int width, int height,
     }
 }
 
+static inline void calculate_rotation_matrix(float yaw, float pitch, float roll,
+                                             float rot_mat[3][3])
+{
+    const float sin_yaw = sinf(-yaw);
+    const float cos_yaw = cosf(-yaw);
+    const float sin_pitch = sinf(pitch);
+    const float cos_pitch = cosf(pitch);
+    const float sin_roll = sinf(roll);
+    const float cos_roll = cosf(roll);
+
+    rot_mat[0][0] = sin_yaw * sin_pitch * sin_roll + cos_yaw * cos_roll;
+    rot_mat[0][1] = sin_yaw * sin_pitch * cos_roll - cos_yaw * sin_roll;
+    rot_mat[0][2] = sin_yaw * cos_pitch;
+
+    rot_mat[1][0] = cos_pitch * sin_roll;
+    rot_mat[1][1] = cos_pitch * cos_roll;
+    rot_mat[1][2] = -sin_pitch;
+
+    rot_mat[2][0] = cos_yaw * sin_pitch * sin_roll - sin_yaw * cos_roll;
+    rot_mat[2][1] = cos_yaw * sin_pitch * cos_roll + sin_yaw * sin_roll;
+    rot_mat[2][2] = cos_yaw * cos_pitch;
+}
+
+static inline void rotate(const float rot_mat[3][3],
+                          float *x, float *y, float *z)
+{
+    const float x_tmp = *x * rot_mat[0][0] + *y * rot_mat[0][1] + *z * rot_mat[0][2];
+    const float y_tmp = *x * rot_mat[1][0] + *y * rot_mat[1][1] + *z * rot_mat[1][2];
+    const float z_tmp = *x * rot_mat[2][0] + *y * rot_mat[2][1] + *z * rot_mat[2][2];
+
+    *x = x_tmp;
+    *y = y_tmp;
+    *z = z_tmp;
+}
+
 static int get_direction(char c)
 {
     switch (c) {
@@ -725,6 +765,7 @@ static int config_output(AVFilterLink *outlink)
     void (*out_transform)(int i, int j, int width, int height,
                           float *x, float *y, float *z);
     void (*calculate_kernel)(float mu, float nu, float kernel[4][4]);
+    float rot_mat[3][3];
 
     switch (s->interp) {
     case NEAREST:
@@ -992,6 +1033,7 @@ static int config_output(AVFilterLink *outlink)
         }
     }
 
+    calculate_rotation_matrix(s->yaw, s->pitch, s->roll, rot_mat);
 
     for (p = 0; p < s->nb_planes; p++) {
         float mu, nu, x, y, z;
@@ -1006,6 +1048,7 @@ static int config_output(AVFilterLink *outlink)
                 struct XYRemap *r = &s->remap[p][j * width + i];
 
                 out_transform(i, j, width, height, &x, &y, &z);
+                rotate(rot_mat, &x, &y, &z);
                 in_transform(x, y, z, in_width, in_height, r->u, r->v, &mu, &nu);
                 calculate_kernel(mu, nu, r->ker);
             }
