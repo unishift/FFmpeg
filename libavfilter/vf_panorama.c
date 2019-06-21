@@ -31,6 +31,7 @@ enum Projections {
     CUBEMAP_3_2,
     CUBEMAP_6_1,
     EQUIANGULAR,
+    FLAT,
     NB_PROJECTIONS,
 };
 
@@ -86,6 +87,7 @@ typedef struct PanoramaContext {
     char* out_frot;
 
     float yaw, pitch, roll;
+    float h_fov, v_fov;
 
     int planewidth[4], planeheight[4];
     int inplanewidth[4], inplaneheight[4];
@@ -114,6 +116,7 @@ static const AVOption panorama_options[] = {
     {      "c3x2", "cubemap3x2",                                 0, AV_OPT_TYPE_CONST,  {.i64=CUBEMAP_3_2},     0,                   0, FLAGS, "out" },
     {      "c6x1", "cubemap6x1",                                 0, AV_OPT_TYPE_CONST,  {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "out" },
     {       "eac", "equi-angular",                               0, AV_OPT_TYPE_CONST,  {.i64=EQUIANGULAR},     0,                   0, FLAGS, "out" },
+    {      "flat", "regular video",                              0, AV_OPT_TYPE_CONST,  {.i64=FLAT},            0,                   0, FLAGS, "out" },
     {    "interp", "set interpolation method",      OFFSET(interp), AV_OPT_TYPE_INT,    {.i64=BILINEAR},        0, NB_INTERP_METHODS-1, FLAGS, "interp" },
     {      "near", "nearest neighbour",                          0, AV_OPT_TYPE_CONST,  {.i64=NEAREST},         0,                   0, FLAGS, "interp" },
     {      "line", "bilinear",                                   0, AV_OPT_TYPE_CONST,  {.i64=BILINEAR},        0,                   0, FLAGS, "interp" },
@@ -126,6 +129,8 @@ static const AVOption panorama_options[] = {
     {       "yaw",                 "yaw rotation",     OFFSET(yaw), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},             -M_PI,            M_PI, FLAGS},
     {     "pitch",               "pitch rotation",   OFFSET(pitch), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},             -M_PI,            M_PI, FLAGS},
     {      "roll",                "roll rotation",    OFFSET(roll), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},             -M_PI,            M_PI, FLAGS},
+    {     "h_fov", "horizontal field of view",       OFFSET(h_fov), AV_OPT_TYPE_FLOAT,  {.dbl=90.f},              0.f,           180.f, FLAGS},
+    {     "v_fov", "vertical field of view",         OFFSET(v_fov), AV_OPT_TYPE_FLOAT,  {.dbl=45.f},              0.f,            90.f, FLAGS},
     { NULL }
 };
 
@@ -680,6 +685,40 @@ static void xyz_to_eac(float x, float y, float z, int width, int height,
     }
 }
 
+static float flat_xrange;
+static float flat_yrange;
+static float flat_zrange;
+
+static inline void calculate_flat_range(float h_fov, float v_fov,
+                                        float *xrange, float *yrange, float *zrange)
+{
+    const float h_angle = h_fov * M_PI / 360.f;
+    const float v_angle = v_fov * M_PI / 360.f;
+
+    const float sin_phi   = sinf(h_angle);
+    const float cos_phi   = cosf(h_angle);
+    const float sin_theta = sinf(v_angle);
+    const float cos_theta = cosf(v_angle);
+
+    *xrange = cos_theta * sin_phi;
+    *yrange = sin_theta;
+    *zrange = -cos_theta * cos_phi;
+}
+
+static void flat_to_xyz(int i, int j, int width, int height,
+                        float *x, float *y, float *z)
+{
+    const float l_x =  flat_xrange * (2.f * i / width  - 1.f);
+    const float l_y = -flat_yrange * (2.f * j / height - 1.f);
+    const float l_z =  flat_zrange;
+
+    const float norm = sqrtf(l_x * l_x + l_y * l_y + l_z * l_z);
+
+    *x = l_x / norm;
+    *y = l_y / norm;
+    *z = l_z / norm;
+}
+
 static inline void calculate_rotation_matrix(float yaw, float pitch, float roll,
                                              float rot_mat[3][3])
 {
@@ -788,6 +827,10 @@ static int config_output(AVFilterLink *outlink)
         av_assert0(0);
     }
 
+    if (s->out == FLAT) {
+        calculate_flat_range(s->h_fov, s->v_fov, &flat_xrange, &flat_yrange, &flat_zrange);
+    }
+
     switch (s->in) {
     case EQUIRECTANGULAR:
     case EQUIANGULAR:
@@ -819,6 +862,10 @@ static int config_output(AVFilterLink *outlink)
     case CUBEMAP_6_1:
         w = wf / 2.f * 3.f;
         h = hf / 2.f;
+        break;
+    case FLAT:
+        w = wf * flat_xrange / flat_yrange / 2.f;
+        h = hf;
         break;
     default:
         av_assert0(0);
@@ -871,6 +918,9 @@ static int config_output(AVFilterLink *outlink)
         break;
     case EQUIANGULAR:
         out_transform = eac_to_xyz;
+        break;
+    case FLAT:
+        out_transform = flat_to_xyz;
         break;
     }
 
