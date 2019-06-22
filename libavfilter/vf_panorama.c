@@ -86,8 +86,16 @@ typedef struct PanoramaContext {
     char* in_frot;
     char* out_frot;
 
+    int in_cubemap_face_order[6];
+    int out_cubemap_direction_order[6];
+    int in_cubemap_face_rotation[6];
+    int out_cubemap_face_rotation[6];
+
     float yaw, pitch, roll;
     float h_fov, v_fov;
+    float flat_xrange;
+    float flat_yrange;
+    float flat_zrange;
 
     int planewidth[4], planeheight[4];
     int inplanewidth[4], inplaneheight[4];
@@ -355,34 +363,15 @@ static inline int mod(int a, int b)
     }
 }
 
-static int in_cubemap_face_order[6] = {
-    TOP_LEFT,     TOP_MIDDLE,    TOP_RIGHT,
-    BOTTOM_LEFT,  BOTTOM_MIDDLE, BOTTOM_RIGHT,
-};
-
-static int out_cubemap_direction_order[6] = {
-    RIGHT, LEFT,  UP,
-    DOWN,  FRONT, BACK,
-};
-
-static int in_cubemap_face_rotation[6] = {
-    ROT_0, ROT_0, ROT_0,
-    ROT_0, ROT_0, ROT_0,
-};
-
-static int out_cubemap_face_rotation[6] = {
-    ROT_0, ROT_0, ROT_0,
-    ROT_0, ROT_0, ROT_0,
-};
-
-static void cube_to_xyz(float uf, float vf, int face,
+static void cube_to_xyz(const PanoramaContext *s,
+                        float uf, float vf, int face,
                         float *x, float *y, float *z)
 {
-    int direction = out_cubemap_direction_order[face];
+    int direction = s->out_cubemap_direction_order[face];
     float norm, tmp;
     float l_x, l_y, l_z;
 
-    switch (out_cubemap_face_rotation[face]) {
+    switch (s->out_cubemap_face_rotation[face]) {
     case ROT_0:
         break;
     case ROT_90:
@@ -440,7 +429,8 @@ static void cube_to_xyz(float uf, float vf, int face,
     *z = l_z / norm;
 }
 
-static void xyz_to_cube(float x, float y, float z, float res,
+static void xyz_to_cube(const PanoramaContext *s,
+                        float x, float y, float z, float res,
                         float *uf, float *vf, int *face)
 {
     float phi   = atan2f(x, -z);
@@ -470,7 +460,7 @@ static void xyz_to_cube(float x, float y, float z, float res,
         direction = UP;
     }
 
-    *face = in_cubemap_face_order[direction];
+    *face = s->in_cubemap_face_order[direction];
     switch (direction) {
     case RIGHT:
         *uf =  z / x;
@@ -498,7 +488,7 @@ static void xyz_to_cube(float x, float y, float z, float res,
         break;
     }
 
-    switch (in_cubemap_face_rotation[*face]) {
+    switch (s->in_cubemap_face_rotation[*face]) {
     case ROT_0:
         break;
     case ROT_90:
@@ -519,7 +509,8 @@ static void xyz_to_cube(float x, float y, float z, float res,
 
 }
 
-static void cube3x2_to_xyz(int i, int j, int width, int height,
+static void cube3x2_to_xyz(const PanoramaContext *s,
+                           int i, int j, int width, int height,
                            float *x, float *y, float *z)
 {
     int ew = width / 3;
@@ -528,10 +519,11 @@ static void cube3x2_to_xyz(int i, int j, int width, int height,
     float uf = 2.f * (i % ew) / ew - 1.f;
     float vf = 2.f * (j % eh) / eh - 1.f;
 
-    cube_to_xyz(uf, vf, face, x, y, z);
+    cube_to_xyz(s, uf, vf, face, x, y, z);
 }
 
-static void xyz_to_cube3x2(float x, float y, float z, int width, int height,
+static void xyz_to_cube3x2(const PanoramaContext *s,
+                           float x, float y, float z, int width, int height,
                            uint16_t *us, uint16_t *vs, float *mu, float *nu)
 {
     float res = M_PI_4 / (width / 3) / 10.f;
@@ -543,7 +535,7 @@ static void xyz_to_cube3x2(float x, float y, float z, int width, int height,
     int i;
     int face;
 
-    xyz_to_cube(x, y, z, res, &uf, &vf, &face);
+    xyz_to_cube(s, x, y, z, res, &uf, &vf, &face);
     uf = rw * (uf + 1.f);
     vf = rh * (vf + 1.f);
 
@@ -561,7 +553,8 @@ static void xyz_to_cube3x2(float x, float y, float z, int width, int height,
     }
 }
 
-static void cube6x1_to_xyz(int i, int j, int width, int height,
+static void cube6x1_to_xyz(const PanoramaContext *s,
+                           int i, int j, int width, int height,
                            float *x, float *y, float *z)
 {
     int ew = width / 6;
@@ -570,10 +563,11 @@ static void cube6x1_to_xyz(int i, int j, int width, int height,
     float uf = 2.f * (i % ew) / ew - 1.f;
     float vf = 2.f * (j % eh) / eh - 1.f;
 
-    cube_to_xyz(uf, vf, face, x, y, z);
+    cube_to_xyz(s, uf, vf, face, x, y, z);
 }
 
-static void xyz_to_cube6x1(float x, float y, float z, int width, int height,
+static void xyz_to_cube6x1(const PanoramaContext *s,
+                           float x, float y, float z, int width, int height,
                            uint16_t *us, uint16_t *vs, float *mu, float *nu)
 {
     float res = M_PI_4 / (width / 6) / 10.f;
@@ -585,7 +579,7 @@ static void xyz_to_cube6x1(float x, float y, float z, int width, int height,
     int i;
     int face;
 
-    xyz_to_cube(x, y, z, res, &uf, &vf, &face);
+    xyz_to_cube(s, x, y, z, res, &uf, &vf, &face);
     uf = rw * (uf + 1.f);
     vf = rh * (vf + 1.f);
 
@@ -603,7 +597,8 @@ static void xyz_to_cube6x1(float x, float y, float z, int width, int height,
     }
 }
 
-static void equirect_to_xyz(int i, int j, int width, int height,
+static void equirect_to_xyz(const PanoramaContext *s,
+                            int i, int j, int width, int height,
                             float *x, float *y, float *z)
 {
     float phi   = ((2.f * i) / width  - 1.f) * M_PI;
@@ -619,7 +614,8 @@ static void equirect_to_xyz(int i, int j, int width, int height,
     *z = -cos_theta * cos_phi;
 }
 
-static void xyz_to_equirect(float x, float y, float z, int width, int height,
+static void xyz_to_equirect(const PanoramaContext *s,
+                            float x, float y, float z, int width, int height,
                             uint16_t *us, uint16_t *vs, float *mu, float *nu)
 {
     float uf, vf;
@@ -643,7 +639,8 @@ static void xyz_to_equirect(float x, float y, float z, int width, int height,
     }
 }
 
-static void eac_to_xyz(int i, int j, int width, int height,
+static void eac_to_xyz(const PanoramaContext *s,
+                       int i, int j, int width, int height,
                        float *x, float *y, float *z)
 {
     int ew = width / 3;
@@ -652,10 +649,11 @@ static void eac_to_xyz(int i, int j, int width, int height,
     float uf = tanf(M_PI_2 * ((float)(i % ew) / ew - 0.5f));
     float vf = tanf(M_PI_2 * ((float)(j % eh) / eh - 0.5f));
 
-    cube_to_xyz(uf, vf, face, x, y, z);
+    cube_to_xyz(s, uf, vf, face, x, y, z);
 }
 
-static void xyz_to_eac(float x, float y, float z, int width, int height,
+static void xyz_to_eac(const PanoramaContext *s,
+                       float x, float y, float z, int width, int height,
                        uint16_t *us, uint16_t *vs, float *mu, float *nu)
 {
     float res = M_PI_4 / (width / 3) / 10.f;
@@ -667,7 +665,7 @@ static void xyz_to_eac(float x, float y, float z, int width, int height,
     int u_shift, v_shift;
     int face;
 
-    xyz_to_cube(x, y, z, res, &uf, &vf, &face);
+    xyz_to_cube(s, x, y, z, res, &uf, &vf, &face);
     uf = rw * (M_2_PI * atanf(uf) + 0.5f);
     vf = rh * (M_2_PI * atanf(vf) + 0.5f);
 
@@ -685,10 +683,6 @@ static void xyz_to_eac(float x, float y, float z, int width, int height,
     }
 }
 
-static float flat_xrange;
-static float flat_yrange;
-static float flat_zrange;
-
 static inline void calculate_flat_range(float h_fov, float v_fov,
                                         float *xrange, float *yrange, float *zrange)
 {
@@ -705,12 +699,13 @@ static inline void calculate_flat_range(float h_fov, float v_fov,
     *zrange = -cos_theta * cos_phi;
 }
 
-static void flat_to_xyz(int i, int j, int width, int height,
+static void flat_to_xyz(const PanoramaContext *s,
+                        int i, int j, int width, int height,
                         float *x, float *y, float *z)
 {
-    const float l_x =  flat_xrange * (2.f * i / width  - 1.f);
-    const float l_y = -flat_yrange * (2.f * j / height - 1.f);
-    const float l_z =  flat_zrange;
+    const float l_x =  s->flat_xrange * (2.f * i / width  - 1.f);
+    const float l_y = -s->flat_yrange * (2.f * j / height - 1.f);
+    const float l_z =  s->flat_zrange;
 
     const float norm = sqrtf(l_x * l_x + l_y * l_y + l_z * l_z);
 
@@ -799,9 +794,11 @@ static int config_output(AVFilterLink *outlink)
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(inlink->format);
     int p, h, w;
     float hf, wf;
-    void (*in_transform)(float x, float y, float z, int width, int height,
+    void (*in_transform)(const PanoramaContext *s,
+                         float x, float y, float z, int width, int height,
                          uint16_t *us, uint16_t *vs, float *mu, float *nu);
-    void (*out_transform)(int i, int j, int width, int height,
+    void (*out_transform)(const PanoramaContext *s,
+                          int i, int j, int width, int height,
                           float *x, float *y, float *z);
     void (*calculate_kernel)(float mu, float nu, float kernel[4][4]);
     float rot_mat[3][3];
@@ -828,7 +825,7 @@ static int config_output(AVFilterLink *outlink)
     }
 
     if (s->out == FLAT) {
-        calculate_flat_range(s->h_fov, s->v_fov, &flat_xrange, &flat_yrange, &flat_zrange);
+        calculate_flat_range(s->h_fov, s->v_fov, &s->flat_xrange, &s->flat_yrange, &s->flat_zrange);
     }
 
     switch (s->in) {
@@ -864,7 +861,7 @@ static int config_output(AVFilterLink *outlink)
         h = hf / 2.f;
         break;
     case FLAT:
-        w = wf * flat_xrange / flat_yrange / 2.f;
+        w = wf * s->flat_xrange / s->flat_yrange / 2.f;
         h = hf;
         break;
     default:
@@ -928,20 +925,20 @@ static int config_output(AVFilterLink *outlink)
         switch (s->in) {
             case CUBEMAP_3_2:
             case CUBEMAP_6_1:
-                in_cubemap_face_order[RIGHT] = TOP_LEFT;
-                in_cubemap_face_order[LEFT] = TOP_MIDDLE;
-                in_cubemap_face_order[UP] = TOP_RIGHT;
-                in_cubemap_face_order[DOWN] = BOTTOM_LEFT;
-                in_cubemap_face_order[FRONT] = BOTTOM_MIDDLE;
-                in_cubemap_face_order[BACK] = BOTTOM_RIGHT;
+                s->in_cubemap_face_order[RIGHT] = TOP_LEFT;
+                s->in_cubemap_face_order[LEFT] = TOP_MIDDLE;
+                s->in_cubemap_face_order[UP] = TOP_RIGHT;
+                s->in_cubemap_face_order[DOWN] = BOTTOM_LEFT;
+                s->in_cubemap_face_order[FRONT] = BOTTOM_MIDDLE;
+                s->in_cubemap_face_order[BACK] = BOTTOM_RIGHT;
                 break;
             case EQUIANGULAR:
-                in_cubemap_face_order[RIGHT] = TOP_RIGHT;
-                in_cubemap_face_order[LEFT] = TOP_LEFT;
-                in_cubemap_face_order[UP] = BOTTOM_RIGHT;
-                in_cubemap_face_order[DOWN] = BOTTOM_LEFT;
-                in_cubemap_face_order[FRONT] = TOP_MIDDLE;
-                in_cubemap_face_order[BACK] = BOTTOM_MIDDLE;
+                s->in_cubemap_face_order[RIGHT] = TOP_RIGHT;
+                s->in_cubemap_face_order[LEFT] = TOP_LEFT;
+                s->in_cubemap_face_order[UP] = BOTTOM_RIGHT;
+                s->in_cubemap_face_order[DOWN] = BOTTOM_LEFT;
+                s->in_cubemap_face_order[FRONT] = TOP_MIDDLE;
+                s->in_cubemap_face_order[BACK] = BOTTOM_MIDDLE;
                 break;
             default:
                 break;
@@ -959,7 +956,7 @@ static int config_output(AVFilterLink *outlink)
                 av_assert0(0);
             }
 
-            in_cubemap_face_order[direction] = face;
+            s->in_cubemap_face_order[direction] = face;
         }
     }
 
@@ -967,20 +964,20 @@ static int config_output(AVFilterLink *outlink)
         switch (s->out) {
             case CUBEMAP_3_2:
             case CUBEMAP_6_1:
-                out_cubemap_direction_order[TOP_LEFT] = RIGHT;
-                out_cubemap_direction_order[TOP_MIDDLE] = LEFT;
-                out_cubemap_direction_order[TOP_RIGHT] = UP;
-                out_cubemap_direction_order[BOTTOM_LEFT] = DOWN;
-                out_cubemap_direction_order[BOTTOM_MIDDLE] = FRONT;
-                out_cubemap_direction_order[BOTTOM_RIGHT] = BACK;
+                s->out_cubemap_direction_order[TOP_LEFT] = RIGHT;
+                s->out_cubemap_direction_order[TOP_MIDDLE] = LEFT;
+                s->out_cubemap_direction_order[TOP_RIGHT] = UP;
+                s->out_cubemap_direction_order[BOTTOM_LEFT] = DOWN;
+                s->out_cubemap_direction_order[BOTTOM_MIDDLE] = FRONT;
+                s->out_cubemap_direction_order[BOTTOM_RIGHT] = BACK;
                 break;
             case EQUIANGULAR:
-                out_cubemap_direction_order[TOP_LEFT] = LEFT;
-                out_cubemap_direction_order[TOP_MIDDLE] = FRONT;
-                out_cubemap_direction_order[TOP_RIGHT] = RIGHT;
-                out_cubemap_direction_order[BOTTOM_LEFT] = DOWN;
-                out_cubemap_direction_order[BOTTOM_MIDDLE] = BACK;
-                out_cubemap_direction_order[BOTTOM_RIGHT] = UP;
+                s->out_cubemap_direction_order[TOP_LEFT] = LEFT;
+                s->out_cubemap_direction_order[TOP_MIDDLE] = FRONT;
+                s->out_cubemap_direction_order[TOP_RIGHT] = RIGHT;
+                s->out_cubemap_direction_order[BOTTOM_LEFT] = DOWN;
+                s->out_cubemap_direction_order[BOTTOM_MIDDLE] = BACK;
+                s->out_cubemap_direction_order[BOTTOM_RIGHT] = UP;
                 break;
             default:
                 break;
@@ -999,7 +996,7 @@ static int config_output(AVFilterLink *outlink)
                 av_assert0(0);
             }
 
-            out_cubemap_direction_order[face] = direction;
+            s->out_cubemap_direction_order[face] = direction;
         }
     }
 
@@ -1007,20 +1004,20 @@ static int config_output(AVFilterLink *outlink)
         switch (s->in) {
             case CUBEMAP_3_2:
             case CUBEMAP_6_1:
-                in_cubemap_face_rotation[TOP_LEFT] = ROT_0;
-                in_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
-                in_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
-                in_cubemap_face_rotation[BOTTOM_LEFT] = ROT_0;
-                in_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_0;
-                in_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_0;
+                s->in_cubemap_face_rotation[TOP_LEFT] = ROT_0;
+                s->in_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
+                s->in_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
+                s->in_cubemap_face_rotation[BOTTOM_LEFT] = ROT_0;
+                s->in_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_0;
+                s->in_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_0;
                 break;
             case EQUIANGULAR:
-                in_cubemap_face_rotation[TOP_LEFT] = ROT_0;
-                in_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
-                in_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
-                in_cubemap_face_rotation[BOTTOM_LEFT] = ROT_270;
-                in_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_90;
-                in_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_270;
+                s->in_cubemap_face_rotation[TOP_LEFT] = ROT_0;
+                s->in_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
+                s->in_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
+                s->in_cubemap_face_rotation[BOTTOM_LEFT] = ROT_270;
+                s->in_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_90;
+                s->in_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_270;
                 break;
             default:
                 break;
@@ -1039,7 +1036,7 @@ static int config_output(AVFilterLink *outlink)
                 av_assert0(0);
             }
 
-            in_cubemap_face_rotation[face] = rotation;
+            s->in_cubemap_face_rotation[face] = rotation;
         }
     }
 
@@ -1047,20 +1044,20 @@ static int config_output(AVFilterLink *outlink)
         switch (s->out) {
             case CUBEMAP_3_2:
             case CUBEMAP_6_1:
-                out_cubemap_face_rotation[TOP_LEFT] = ROT_0;
-                out_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
-                out_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
-                out_cubemap_face_rotation[BOTTOM_LEFT] = ROT_0;
-                out_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_0;
-                out_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_0;
+                s->out_cubemap_face_rotation[TOP_LEFT] = ROT_0;
+                s->out_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
+                s->out_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
+                s->out_cubemap_face_rotation[BOTTOM_LEFT] = ROT_0;
+                s->out_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_0;
+                s->out_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_0;
                 break;
             case EQUIANGULAR:
-                out_cubemap_face_rotation[TOP_LEFT] = ROT_0;
-                out_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
-                out_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
-                out_cubemap_face_rotation[BOTTOM_LEFT] = ROT_270;
-                out_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_90;
-                out_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_270;
+                s->out_cubemap_face_rotation[TOP_LEFT] = ROT_0;
+                s->out_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
+                s->out_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
+                s->out_cubemap_face_rotation[BOTTOM_LEFT] = ROT_270;
+                s->out_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_90;
+                s->out_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_270;
                 break;
             default:
                 break;
@@ -1079,7 +1076,7 @@ static int config_output(AVFilterLink *outlink)
                 av_assert0(0);
             }
 
-            out_cubemap_face_rotation[face] = rotation;
+            s->out_cubemap_face_rotation[face] = rotation;
         }
     }
 
@@ -1097,9 +1094,9 @@ static int config_output(AVFilterLink *outlink)
             for (j = 0; j < height; j++) {
                 struct XYRemap *r = &s->remap[p][j * width + i];
 
-                out_transform(i, j, width, height, &x, &y, &z);
+                out_transform(s, i, j, width, height, &x, &y, &z);
                 rotate(rot_mat, &x, &y, &z);
-                in_transform(x, y, z, in_width, in_height, r->u, r->v, &mu, &nu);
+                in_transform(s, x, y, z, in_width, in_height, r->u, r->v, &mu, &nu);
                 calculate_kernel(mu, nu, r->ker);
             }
         }
