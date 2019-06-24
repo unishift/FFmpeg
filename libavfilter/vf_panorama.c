@@ -1113,9 +1113,6 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     AVFrame *out;
     int plane;
 
-    if (s->in == s->out)
-        return ff_filter_frame(outlink, in);
-
     out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
     if (!out) {
         av_frame_free(&in);
