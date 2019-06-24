@@ -92,10 +92,9 @@ typedef struct PanoramaContext {
     int out_cubemap_face_rotation[6];
 
     float yaw, pitch, roll;
+
     float h_fov, v_fov;
-    float flat_xrange;
-    float flat_yrange;
-    float flat_zrange;
+    float flat_range[3];
 
     int planewidth[4], planeheight[4];
     int inplanewidth[4], inplaneheight[4];
@@ -365,7 +364,7 @@ static inline int mod(int a, int b)
 
 static void cube_to_xyz(const PanoramaContext *s,
                         float uf, float vf, int face,
-                        float *x, float *y, float *z)
+                        float *vec)
 {
     int direction = s->out_cubemap_direction_order[face];
     float norm, tmp;
@@ -424,17 +423,17 @@ static void cube_to_xyz(const PanoramaContext *s,
     }
 
     norm = sqrtf(l_x * l_x + l_y * l_y + l_z * l_z);
-    *x = l_x / norm;
-    *y = l_y / norm;
-    *z = l_z / norm;
+    vec[0] = l_x / norm;
+    vec[1] = l_y / norm;
+    vec[2] = l_z / norm;
 }
 
 static void xyz_to_cube(const PanoramaContext *s,
-                        float x, float y, float z, float res,
+                        const float *vec, float res,
                         float *uf, float *vf, int *face)
 {
-    float phi   = atan2f(x, -z);
-    float theta = asinf(-y);
+    float phi   = atan2f(vec[0], -vec[2]);
+    float theta = asinf(-vec[1]);
     float phi_norm, theta_threshold;
     float tmp;
     int direction;
@@ -463,28 +462,28 @@ static void xyz_to_cube(const PanoramaContext *s,
     *face = s->in_cubemap_face_order[direction];
     switch (direction) {
     case RIGHT:
-        *uf =  z / x;
-        *vf = -y / x;
+        *uf =  vec[2] / vec[0];
+        *vf = -vec[1] / vec[0];
         break;
     case LEFT:
-        *uf =  z / x;
-        *vf =  y / x;
+        *uf =  vec[2] / vec[0];
+        *vf =  vec[1] / vec[0];
         break;
     case UP:
-        *uf =  x / y;
-        *vf = -z / y;
+        *uf =  vec[0] / vec[1];
+        *vf = -vec[2] / vec[1];
         break;
     case DOWN:
-        *uf = -x / y;
-        *vf = -z / y;
+        *uf = -vec[0] / vec[1];
+        *vf = -vec[2] / vec[1];
         break;
     case FRONT:
-        *uf = -x / z;
-        *vf =  y / z;
+        *uf = -vec[0] / vec[2];
+        *vf =  vec[1] / vec[2];
         break;
     case BACK:
-        *uf = -x / z;
-        *vf = -y / z;
+        *uf = -vec[0] / vec[2];
+        *vf = -vec[1] / vec[2];
         break;
     }
 
@@ -511,7 +510,7 @@ static void xyz_to_cube(const PanoramaContext *s,
 
 static void cube3x2_to_xyz(const PanoramaContext *s,
                            int i, int j, int width, int height,
-                           float *x, float *y, float *z)
+                           float *vec)
 {
     int ew = width / 3;
     int eh = height / 2;
@@ -519,11 +518,11 @@ static void cube3x2_to_xyz(const PanoramaContext *s,
     float uf = 2.f * (i % ew) / ew - 1.f;
     float vf = 2.f * (j % eh) / eh - 1.f;
 
-    cube_to_xyz(s, uf, vf, face, x, y, z);
+    cube_to_xyz(s, uf, vf, face, vec);
 }
 
 static void xyz_to_cube3x2(const PanoramaContext *s,
-                           float x, float y, float z, int width, int height,
+                           const float *vec, int width, int height,
                            uint16_t *us, uint16_t *vs, float *mu, float *nu)
 {
     float res = M_PI_4 / (width / 3) / 10.f;
@@ -535,7 +534,7 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
     int i;
     int face;
 
-    xyz_to_cube(s, x, y, z, res, &uf, &vf, &face);
+    xyz_to_cube(s, vec, res, &uf, &vf, &face);
     uf = rw * (uf + 1.f);
     vf = rh * (vf + 1.f);
 
@@ -555,7 +554,7 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
 
 static void cube6x1_to_xyz(const PanoramaContext *s,
                            int i, int j, int width, int height,
-                           float *x, float *y, float *z)
+                           float *vec)
 {
     int ew = width / 6;
     int eh = height;
@@ -563,11 +562,11 @@ static void cube6x1_to_xyz(const PanoramaContext *s,
     float uf = 2.f * (i % ew) / ew - 1.f;
     float vf = 2.f * (j % eh) / eh - 1.f;
 
-    cube_to_xyz(s, uf, vf, face, x, y, z);
+    cube_to_xyz(s, uf, vf, face, vec);
 }
 
 static void xyz_to_cube6x1(const PanoramaContext *s,
-                           float x, float y, float z, int width, int height,
+                           const float *vec, int width, int height,
                            uint16_t *us, uint16_t *vs, float *mu, float *nu)
 {
     float res = M_PI_4 / (width / 6) / 10.f;
@@ -579,7 +578,7 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
     int i;
     int face;
 
-    xyz_to_cube(s, x, y, z, res, &uf, &vf, &face);
+    xyz_to_cube(s, vec, res, &uf, &vf, &face);
     uf = rw * (uf + 1.f);
     vf = rh * (vf + 1.f);
 
@@ -593,13 +592,12 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
     for (i = -1; i < 3; i++) {
         us[i + 1] = u_shift + av_clip(ui + i, 0, 2 * rw - 1);
         vs[i + 1] =           av_clip(vi + i, 0, 2 * rh - 1);
-
     }
 }
 
 static void equirect_to_xyz(const PanoramaContext *s,
                             int i, int j, int width, int height,
-                            float *x, float *y, float *z)
+                            float *vec)
 {
     float phi   = ((2.f * i) / width  - 1.f) * M_PI;
     float theta = ((2.f * j) / height - 1.f) * M_PI_2;
@@ -609,20 +607,20 @@ static void equirect_to_xyz(const PanoramaContext *s,
     const float sin_theta = sinf(theta);
     const float cos_theta = cosf(theta);
 
-    *x =  cos_theta * sin_phi;
-    *y = -sin_theta;
-    *z = -cos_theta * cos_phi;
+    vec[0] =  cos_theta * sin_phi;
+    vec[1] = -sin_theta;
+    vec[2] = -cos_theta * cos_phi;
 }
 
 static void xyz_to_equirect(const PanoramaContext *s,
-                            float x, float y, float z, int width, int height,
+                            const float *vec, int width, int height,
                             uint16_t *us, uint16_t *vs, float *mu, float *nu)
 {
     float uf, vf;
     int ui, vi;
     int i;
-    float phi   = atan2f(x, -z);
-    float theta = asinf(-y);
+    float phi   = atan2f(vec[0], -vec[2]);
+    float theta = asinf(-vec[1]);
 
     uf = (phi   / M_PI   + 1.f) * width  / 2.f;
     vf = (theta / M_PI_2 + 1.f) * height / 2.f;
@@ -641,7 +639,7 @@ static void xyz_to_equirect(const PanoramaContext *s,
 
 static void eac_to_xyz(const PanoramaContext *s,
                        int i, int j, int width, int height,
-                       float *x, float *y, float *z)
+                       float *vec)
 {
     int ew = width / 3;
     int eh = height / 2;
@@ -649,11 +647,11 @@ static void eac_to_xyz(const PanoramaContext *s,
     float uf = tanf(M_PI_2 * ((float)(i % ew) / ew - 0.5f));
     float vf = tanf(M_PI_2 * ((float)(j % eh) / eh - 0.5f));
 
-    cube_to_xyz(s, uf, vf, face, x, y, z);
+    cube_to_xyz(s, uf, vf, face, vec);
 }
 
 static void xyz_to_eac(const PanoramaContext *s,
-                       float x, float y, float z, int width, int height,
+                       const float *vec, int width, int height,
                        uint16_t *us, uint16_t *vs, float *mu, float *nu)
 {
     float res = M_PI_4 / (width / 3) / 10.f;
@@ -665,7 +663,7 @@ static void xyz_to_eac(const PanoramaContext *s,
     int u_shift, v_shift;
     int face;
 
-    xyz_to_cube(s, x, y, z, res, &uf, &vf, &face);
+    xyz_to_cube(s, vec, res, &uf, &vf, &face);
     uf = rw * (M_2_PI * atanf(uf) + 0.5f);
     vf = rh * (M_2_PI * atanf(vf) + 0.5f);
 
@@ -684,7 +682,7 @@ static void xyz_to_eac(const PanoramaContext *s,
 }
 
 static inline void calculate_flat_range(float h_fov, float v_fov,
-                                        float *xrange, float *yrange, float *zrange)
+                                        float *range)
 {
     const float h_angle = h_fov * M_PI / 360.f;
     const float v_angle = v_fov * M_PI / 360.f;
@@ -694,24 +692,24 @@ static inline void calculate_flat_range(float h_fov, float v_fov,
     const float sin_theta = sinf(v_angle);
     const float cos_theta = cosf(v_angle);
 
-    *xrange = cos_theta * sin_phi;
-    *yrange = sin_theta;
-    *zrange = -cos_theta * cos_phi;
+    range[0] =  cos_theta * sin_phi;
+    range[1] =  sin_theta;
+    range[2] = -cos_theta * cos_phi;
 }
 
 static void flat_to_xyz(const PanoramaContext *s,
                         int i, int j, int width, int height,
-                        float *x, float *y, float *z)
+                        float *vec)
 {
-    const float l_x =  s->flat_xrange * (2.f * i / width  - 1.f);
-    const float l_y = -s->flat_yrange * (2.f * j / height - 1.f);
-    const float l_z =  s->flat_zrange;
+    const float l_x =  s->flat_range[0] * (2.f * i / width  - 1.f);
+    const float l_y = -s->flat_range[1] * (2.f * j / height - 1.f);
+    const float l_z =  s->flat_range[2];
 
     const float norm = sqrtf(l_x * l_x + l_y * l_y + l_z * l_z);
 
-    *x = l_x / norm;
-    *y = l_y / norm;
-    *z = l_z / norm;
+    vec[0] = l_x / norm;
+    vec[1] = l_y / norm;
+    vec[2] = l_z / norm;
 }
 
 static inline void calculate_rotation_matrix(float yaw, float pitch, float roll,
@@ -738,15 +736,15 @@ static inline void calculate_rotation_matrix(float yaw, float pitch, float roll,
 }
 
 static inline void rotate(const float rot_mat[3][3],
-                          float *x, float *y, float *z)
+                          float *vec)
 {
-    const float x_tmp = *x * rot_mat[0][0] + *y * rot_mat[0][1] + *z * rot_mat[0][2];
-    const float y_tmp = *x * rot_mat[1][0] + *y * rot_mat[1][1] + *z * rot_mat[1][2];
-    const float z_tmp = *x * rot_mat[2][0] + *y * rot_mat[2][1] + *z * rot_mat[2][2];
+    const float x_tmp = vec[0] * rot_mat[0][0] + vec[1] * rot_mat[0][1] + vec[2] * rot_mat[0][2];
+    const float y_tmp = vec[0] * rot_mat[1][0] + vec[1] * rot_mat[1][1] + vec[2] * rot_mat[1][2];
+    const float z_tmp = vec[0] * rot_mat[2][0] + vec[1] * rot_mat[2][1] + vec[2] * rot_mat[2][2];
 
-    *x = x_tmp;
-    *y = y_tmp;
-    *z = z_tmp;
+    vec[0] = x_tmp;
+    vec[1] = y_tmp;
+    vec[2] = z_tmp;
 }
 
 static int get_direction(char c)
@@ -795,11 +793,11 @@ static int config_output(AVFilterLink *outlink)
     int p, h, w;
     float hf, wf;
     void (*in_transform)(const PanoramaContext *s,
-                         float x, float y, float z, int width, int height,
+                         const float *vec, int width, int height,
                          uint16_t *us, uint16_t *vs, float *mu, float *nu);
     void (*out_transform)(const PanoramaContext *s,
                           int i, int j, int width, int height,
-                          float *x, float *y, float *z);
+                          float *vec);
     void (*calculate_kernel)(float mu, float nu, float kernel[4][4]);
     float rot_mat[3][3];
 
@@ -825,7 +823,7 @@ static int config_output(AVFilterLink *outlink)
     }
 
     if (s->out == FLAT) {
-        calculate_flat_range(s->h_fov, s->v_fov, &s->flat_xrange, &s->flat_yrange, &s->flat_zrange);
+        calculate_flat_range(s->h_fov, s->v_fov, s->flat_range);
     }
 
     switch (s->in) {
@@ -861,7 +859,7 @@ static int config_output(AVFilterLink *outlink)
         h = hf / 2.f;
         break;
     case FLAT:
-        w = wf * s->flat_xrange / s->flat_yrange / 2.f;
+        w = wf * s->flat_range[0] / s->flat_range[1] / 2.f;
         h = hf;
         break;
     default:
@@ -1083,7 +1081,8 @@ static int config_output(AVFilterLink *outlink)
     calculate_rotation_matrix(s->yaw, s->pitch, s->roll, rot_mat);
 
     for (p = 0; p < s->nb_planes; p++) {
-        float mu, nu, x, y, z;
+        float mu, nu;
+        float vec[3];
         int width = s->planewidth[p];
         int height = s->planeheight[p];
         int in_width = s->inplanewidth[p];
@@ -1094,9 +1093,9 @@ static int config_output(AVFilterLink *outlink)
             for (j = 0; j < height; j++) {
                 struct XYRemap *r = &s->remap[p][j * width + i];
 
-                out_transform(s, i, j, width, height, &x, &y, &z);
-                rotate(rot_mat, &x, &y, &z);
-                in_transform(s, x, y, z, in_width, in_height, r->u, r->v, &mu, &nu);
+                out_transform(s, i, j, width, height, vec);
+                rotate(rot_mat, vec);
+                in_transform(s, vec, in_width, in_height, r->u, r->v, &mu, &nu);
                 calculate_kernel(mu, nu, r->ker);
             }
         }
