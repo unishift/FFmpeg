@@ -93,6 +93,8 @@ typedef struct PanoramaContext {
 
     float yaw, pitch, roll;
 
+    int hflip, vflip, dflip;
+
     float h_fov, v_fov;
     float flat_range[3];
 
@@ -138,6 +140,9 @@ static const AVOption panorama_options[] = {
     {      "roll", "roll rotation",                   OFFSET(roll), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},             -M_PI,            M_PI, FLAGS},
     {     "h_fov", "horizontal field of view",       OFFSET(h_fov), AV_OPT_TYPE_FLOAT,  {.dbl=90.f},              0.f,           180.f, FLAGS},
     {     "v_fov", "vertical field of view",         OFFSET(v_fov), AV_OPT_TYPE_FLOAT,  {.dbl=45.f},              0.f,            90.f, FLAGS},
+    {     "hflip", "flip video horizontally",        OFFSET(hflip), AV_OPT_TYPE_BOOL,   {.i64=0},                   0,               1, FLAGS},
+    {     "vflip", "flip video vertically",          OFFSET(vflip), AV_OPT_TYPE_BOOL,   {.i64=0},                   0,               1, FLAGS},
+    {     "dflip", "flip video indepth",             OFFSET(dflip), AV_OPT_TYPE_BOOL,   {.i64=0},                   0,               1, FLAGS},
     { NULL }
 };
 
@@ -747,6 +752,22 @@ static inline void rotate(const float rot_mat[3][3],
     vec[2] = z_tmp;
 }
 
+static inline void set_mirror_modifier(int hflip, int vflip, int dflip,
+                                       float *modifier)
+{
+    modifier[0] = hflip ? -1.f : 1.f;
+    modifier[1] = vflip ? -1.f : 1.f;
+    modifier[2] = dflip ? -1.f : 1.f;
+}
+
+static inline void mirror(const float *modifier,
+                          float *vec)
+{
+    vec[0] *= modifier[0];
+    vec[1] *= modifier[1];
+    vec[2] *= modifier[2];
+}
+
 static int get_direction(char c)
 {
     switch (c) {
@@ -792,6 +813,7 @@ static int config_output(AVFilterLink *outlink)
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(inlink->format);
     int p, h, w;
     float hf, wf;
+    float mirror_modifier[3];
     void (*in_transform)(const PanoramaContext *s,
                          const float *vec, int width, int height,
                          uint16_t *us, uint16_t *vs, float *mu, float *nu);
@@ -1079,6 +1101,7 @@ static int config_output(AVFilterLink *outlink)
     }
 
     calculate_rotation_matrix(s->yaw, s->pitch, s->roll, rot_mat);
+    set_mirror_modifier(s->hflip, s->vflip, s->dflip, mirror_modifier);
 
     for (p = 0; p < s->nb_planes; p++) {
         float mu, nu;
@@ -1095,6 +1118,7 @@ static int config_output(AVFilterLink *outlink)
 
                 out_transform(s, i, j, width, height, vec);
                 rotate(rot_mat, vec);
+                mirror(mirror_modifier, vec);
                 in_transform(s, vec, in_width, in_height, r->u, r->v, &mu, &nu);
                 calculate_kernel(mu, nu, r->ker);
             }
