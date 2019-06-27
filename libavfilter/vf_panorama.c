@@ -104,12 +104,15 @@ typedef struct PanoramaContext {
 
     struct XYRemap *remap[4];
 
-    int (*panorama)(struct PanoramaContext *s,
-                    const uint8_t *src, uint8_t *dst,
-                    int width, int height,
-                    int in_linesize, int out_linesize,
-                    const struct XYRemap *remap);
+    int (*panorama_slice)(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs);
 } PanoramaContext;
+
+typedef struct ThreadData {
+    PanoramaContext *s;
+    AVFrame *in;
+    AVFrame *out;
+    int nb_planes;
+} ThreadData;
 
 #define OFFSET(x) offsetof(PanoramaContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
@@ -163,20 +166,34 @@ static int query_formats(AVFilterContext *ctx)
     return ff_set_common_formats(ctx, fmts_list);
 }
 
-static int nearest(PanoramaContext *s,
-                   const uint8_t *src, uint8_t *dst,
-                   int width, int height,
-                   int in_linesize, int out_linesize,
-                   const struct XYRemap *remap)
+static int nearest_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
 {
-    int x, y;
+    ThreadData *td = (ThreadData*)arg;
+    const PanoramaContext *s = td->s;
+    const AVFrame *in = td->in;
+    AVFrame *out = td->out;
 
-    for (y = 0; y < height; y++) {
-        uint8_t *d = dst + y * out_linesize;
-        for (x = 0; x < width; x++) {
-            const struct XYRemap *r = &remap[y * width + x];
+    int plane, x, y;
 
-            *d++ = src[r->v[1] * in_linesize + r->u[1]];
+    for (plane = 0; plane < td->nb_planes; plane++) {
+        const int in_linesize  = in->linesize[plane];
+        const int out_linesize = out->linesize[plane];
+        const uint8_t *src = in->data[plane];
+        uint8_t *dst = out->data[plane];
+        const struct XYRemap *remap = s->remap[plane];
+        const int width = s->planewidth[plane];
+        const int height = s->planeheight[plane];
+
+        const int slice_start = (height *  jobnr     ) / nb_jobs;
+        const int slice_end   = (height * (jobnr + 1)) / nb_jobs;
+
+        for (y = slice_start; y < slice_end; y++) {
+            uint8_t *d = dst + y * out_linesize;
+            for (x = 0; x < width; x++) {
+                const struct XYRemap *r = &remap[y * width + x];
+
+                *d++ = src[r->v[1] * in_linesize + r->u[1]];
+            }
         }
     }
 
@@ -188,27 +205,41 @@ static void nearest_kernel(float mu, float nu, float kernel[4][4])
     return;
 }
 
-static int bilinear(PanoramaContext *s,
-                    const uint8_t *src, uint8_t *dst,
-                    int width, int height,
-                    int in_linesize, int out_linesize,
-                    const struct XYRemap *remap)
+static int bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
 {
-    int x, y, i, j;
+    ThreadData *td = (ThreadData*)arg;
+    const PanoramaContext *s = td->s;
+    const AVFrame *in = td->in;
+    AVFrame *out = td->out;
 
-    for (y = 0; y < height; y++) {
-        uint8_t *d = dst + y * out_linesize;
-        for (x = 0; x < width; x++) {
-            const struct XYRemap *r = &remap[y * width + x];
-            float tmp = 0.f;
+    int plane, x, y, i, j;
 
-            for (i = 1; i < 3; i++) {
-                for (j = 1; j < 3; j++) {
-                    tmp += r->ker[i][j] * src[r->v[i] * in_linesize + r->u[j]];
+    for (plane = 0; plane < td->nb_planes; plane++) {
+        const int in_linesize  = in->linesize[plane];
+        const int out_linesize = out->linesize[plane];
+        const uint8_t *src = in->data[plane];
+        uint8_t *dst = out->data[plane];
+        const struct XYRemap *remap = s->remap[plane];
+        const int width = s->planewidth[plane];
+        const int height = s->planeheight[plane];
+
+        const int slice_start = (height *  jobnr     ) / nb_jobs;
+        const int slice_end   = (height * (jobnr + 1)) / nb_jobs;
+
+        for (y = slice_start; y < slice_end; y++) {
+            uint8_t *d = dst + y * out_linesize;
+            for (x = 0; x < width; x++) {
+                const struct XYRemap *r = &remap[y * width + x];
+                float tmp = 0.f;
+
+                for (i = 1; i < 3; i++) {
+                    for (j = 1; j < 3; j++) {
+                        tmp += r->ker[i][j] * src[r->v[i] * in_linesize + r->u[j]];
+                    }
                 }
-            }
 
-            *d++ = roundf(tmp);
+                *d++ = roundf(tmp);
+            }
         }
     }
 
@@ -223,27 +254,41 @@ static void bilinear_kernel(float mu, float nu, float kernel[4][4])
     kernel[2][2] =        mu  *        nu;
 }
 
-static int bicubic(PanoramaContext *s,
-                   const uint8_t *src, uint8_t *dst,
-                   int width, int height,
-                   int in_linesize, int out_linesize,
-                   const struct XYRemap *remap)
+static int bicubic_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
 {
-    int x, y, i, j;
+    ThreadData *td = (ThreadData*)arg;
+    const PanoramaContext *s = td->s;
+    const AVFrame *in = td->in;
+    AVFrame *out = td->out;
 
-    for (y = 0; y < height; y++) {
-        uint8_t *d = dst + y * out_linesize;
-        for (x = 0; x < width; x++) {
-            const struct XYRemap *r = &remap[y * width + x];
-            float tmp = 0.f;
+    int plane, x, y, i, j;
 
-            for (i = 0; i < 4; i++) {
-                for (j = 0; j < 4; j++) {
-                    tmp += r->ker[i][j] * src[r->v[i] * in_linesize + r->u[j]];
+    for (plane = 0; plane < td->nb_planes; plane++) {
+        const int in_linesize  = in->linesize[plane];
+        const int out_linesize = out->linesize[plane];
+        const uint8_t *src = in->data[plane];
+        uint8_t *dst = out->data[plane];
+        const struct XYRemap *remap = s->remap[plane];
+        const int width = s->planewidth[plane];
+        const int height = s->planeheight[plane];
+
+        const int slice_start = (height *  jobnr     ) / nb_jobs;
+        const int slice_end   = (height * (jobnr + 1)) / nb_jobs;
+
+        for (y = slice_start; y < slice_end; y++) {
+            uint8_t *d = dst + y * out_linesize;
+            for (x = 0; x < width; x++) {
+                const struct XYRemap *r = &remap[y * width + x];
+                float tmp = 0.f;
+
+                for (i = 0; i < 4; i++) {
+                    for (j = 0; j < 4; j++) {
+                        tmp += r->ker[i][j] * src[r->v[i] * in_linesize + r->u[j]];
+                    }
                 }
-            }
 
-            *d++ = av_clip(tmp, 0, 255);
+                *d++ = av_clip(tmp, 0, 255);
+            }
         }
     }
 
@@ -277,27 +322,41 @@ static void bicubic_kernel(float mu, float nu, float kernel[4][4])
     }
 }
 
-static int lanczos(PanoramaContext *s,
-                   const uint8_t *src, uint8_t *dst,
-                   int width, int height,
-                   int in_linesize, int out_linesize,
-                   const struct XYRemap *remap)
+static int lanczos_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
 {
-    int x, y, i, j;
+    ThreadData *td = (ThreadData*)arg;
+    const PanoramaContext *s = td->s;
+    const AVFrame *in = td->in;
+    AVFrame *out = td->out;
 
-    for (y = 0; y < height; y++) {
-        uint8_t *d = dst + y * out_linesize;
-        for (x = 0; x < width; x++) {
-            const struct XYRemap *r = &remap[y * width + x];
-            float tmp = 0.f;
+    int plane, x, y, i, j;
 
-            for (i = 0; i < 4; i++) {
-                for (j = 0; j < 4; j++) {
-                    tmp += r->ker[i][j] * src[r->v[i] * in_linesize + r->u[j]];
+    for (plane = 0; plane < td->nb_planes; plane++) {
+        const int in_linesize  = in->linesize[plane];
+        const int out_linesize = out->linesize[plane];
+        const uint8_t *src = in->data[plane];
+        uint8_t *dst = out->data[plane];
+        const struct XYRemap *remap = s->remap[plane];
+        const int width = s->planewidth[plane];
+        const int height = s->planeheight[plane];
+
+        const int slice_start = (height *  jobnr     ) / nb_jobs;
+        const int slice_end   = (height * (jobnr + 1)) / nb_jobs;
+
+        for (y = slice_start; y < slice_end; y++) {
+            uint8_t *d = dst + y * out_linesize;
+            for (x = 0; x < width; x++) {
+                const struct XYRemap *r = &remap[y * width + x];
+                float tmp = 0.f;
+
+                for (i = 0; i < 4; i++) {
+                    for (j = 0; j < 4; j++) {
+                        tmp += r->ker[i][j] * src[r->v[i] * in_linesize + r->u[j]];
+                    }
                 }
-            }
 
-            *d++ = av_clip(tmp, 0, 255);
+                *d++ = av_clip(tmp, 0, 255);
+            }
         }
     }
 
@@ -825,19 +884,19 @@ static int config_output(AVFilterLink *outlink)
 
     switch (s->interp) {
     case NEAREST:
-        s->panorama = nearest;
+        s->panorama_slice = nearest_slice;
         calculate_kernel = nearest_kernel;
         break;
     case BILINEAR:
-        s->panorama = bilinear;
+        s->panorama_slice = bilinear_slice;
         calculate_kernel = bilinear_kernel;
         break;
     case BICUBIC:
-        s->panorama = bicubic;
+        s->panorama_slice = bicubic_slice;
         calculate_kernel = bicubic_kernel;
         break;
     case LANCZOS:
-        s->panorama = lanczos;
+        s->panorama_slice = lanczos_slice;
         calculate_kernel = lanczos_kernel;
         break;
     default:
@@ -1134,7 +1193,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     AVFilterLink *outlink = ctx->outputs[0];
     PanoramaContext *s = ctx->priv;
     AVFrame *out;
-    int plane;
+    ThreadData td;
 
     out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
     if (!out) {
@@ -1143,12 +1202,12 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     }
     av_frame_copy_props(out, in);
 
-    for (plane = 0; plane < s->nb_planes; plane++) {
-        s->panorama(s, in->data[plane], out->data[plane],
-                    s->planewidth[plane], s->planeheight[plane],
-                    in->linesize[plane], out->linesize[plane],
-                    s->remap[plane]);
-    }
+    td.s = s;
+    td.in = in;
+    td.out = out;
+    td.nb_planes = s->nb_planes;
+
+    ctx->internal->execute(ctx, s->panorama_slice, &td, NULL, FFMIN(outlink->h, ff_filter_get_nb_threads(ctx)));
 
     av_frame_free(&in);
     return ff_filter_frame(outlink, out);
@@ -1190,5 +1249,5 @@ AVFilter ff_vf_panorama = {
     .inputs        = inputs,
     .outputs       = outputs,
     .priv_class    = &panorama_class,
-    .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC,
+    .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
 };
