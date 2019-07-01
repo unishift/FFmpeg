@@ -72,8 +72,8 @@ enum Rotation {
 };
 
 typedef struct XYRemap {
-    uint16_t u[4];
-    uint16_t v[4];
+    uint16_t u[4][4];
+    uint16_t v[4][4];
     float ker[4][4];
 } XYRemap;
 
@@ -192,7 +192,7 @@ static int nearest_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs
             for (x = 0; x < width; x++) {
                 const XYRemap *r = &remap[y * width + x];
 
-                *d++ = src[r->v[1] * in_linesize + r->u[1]];
+                *d++ = src[r->v[1][1] * in_linesize + r->u[1][1]];
             }
         }
     }
@@ -234,7 +234,7 @@ static int bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_job
 
                 for (i = 1; i < 3; i++) {
                     for (j = 1; j < 3; j++) {
-                        tmp += r->ker[i][j] * src[r->v[i] * in_linesize + r->u[j]];
+                        tmp += r->ker[i][j] * src[r->v[i][j] * in_linesize + r->u[i][j]];
                     }
                 }
 
@@ -283,7 +283,7 @@ static int bicubic_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs
 
                 for (i = 0; i < 4; i++) {
                     for (j = 0; j < 4; j++) {
-                        tmp += r->ker[i][j] * src[r->v[i] * in_linesize + r->u[j]];
+                        tmp += r->ker[i][j] * src[r->v[i][j] * in_linesize + r->u[i][j]];
                     }
                 }
 
@@ -351,7 +351,7 @@ static int lanczos_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs
 
                 for (i = 0; i < 4; i++) {
                     for (j = 0; j < 4; j++) {
-                        tmp += r->ker[i][j] * src[r->v[i] * in_linesize + r->u[j]];
+                        tmp += r->ker[i][j] * src[r->v[i][j] * in_linesize + r->u[i][j]];
                     }
                 }
 
@@ -587,7 +587,7 @@ static void cube3x2_to_xyz(const PanoramaContext *s,
 
 static void xyz_to_cube3x2(const PanoramaContext *s,
                            const float *vec, int width, int height,
-                           uint16_t *us, uint16_t *vs, float *mu, float *nu)
+                           uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu)
 {
     float res = M_PI_4 / (width / 3) / 10.f;
     float uf, vf;
@@ -595,7 +595,7 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
     float rw = width / 6.f;
     int ui, vi;
     int u_shift, v_shift;
-    int i;
+    int i, j;
     int face;
 
     xyz_to_cube(s, vec, res, &uf, &vf, &face);
@@ -611,8 +611,10 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
     u_shift = (width  / 3.f) * (face % 3);
     v_shift = (height / 2.f) * (face / 3);
     for (i = -1; i < 3; i++) {
-        us[i + 1] = u_shift + av_clip(ui + i, 0, 2 * rw - 1);
-        vs[i + 1] = v_shift + av_clip(vi + i, 0, 2 * rh - 1);
+        for (j = -1; j < 3; j++) {
+            us[i + 1][j + 1] = u_shift + av_clip(ui + j, 0, 2 * rw - 1);
+            vs[i + 1][j + 1] = v_shift + av_clip(vi + i, 0, 2 * rh - 1);
+        }
     }
 }
 
@@ -631,7 +633,7 @@ static void cube6x1_to_xyz(const PanoramaContext *s,
 
 static void xyz_to_cube6x1(const PanoramaContext *s,
                            const float *vec, int width, int height,
-                           uint16_t *us, uint16_t *vs, float *mu, float *nu)
+                           uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu)
 {
     float res = M_PI_4 / (width / 6) / 10.f;
     float uf, vf;
@@ -639,7 +641,7 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
     float rw = width / 12;
     int ui, vi;
     int u_shift;
-    int i;
+    int i, j;
     int face;
 
     xyz_to_cube(s, vec, res, &uf, &vf, &face);
@@ -654,8 +656,10 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
 
     u_shift = (width / 6.f) * face;
     for (i = -1; i < 3; i++) {
-        us[i + 1] = u_shift + av_clip(ui + i, 0, 2 * rw - 1);
-        vs[i + 1] =           av_clip(vi + i, 0, 2 * rh - 1);
+        for (j = -1; j < 3; j++) {
+            us[i + 1][j + 1] = u_shift + av_clip(ui + j, 0, 2 * rw - 1);
+            vs[i + 1][j + 1] =           av_clip(vi + i, 0, 2 * rh - 1);
+        }
     }
 }
 
@@ -678,11 +682,11 @@ static void equirect_to_xyz(const PanoramaContext *s,
 
 static void xyz_to_equirect(const PanoramaContext *s,
                             const float *vec, int width, int height,
-                            uint16_t *us, uint16_t *vs, float *mu, float *nu)
+                            uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu)
 {
     float uf, vf;
     int ui, vi;
-    int i;
+    int i, j;
     float phi   = atan2f(vec[0], -vec[2]);
     float theta = asinf(-vec[1]);
 
@@ -695,9 +699,10 @@ static void xyz_to_equirect(const PanoramaContext *s,
     *nu = vf - vi;
 
     for (i = -1; i < 3; i++) {
-        us[i + 1] = mod(ui + i, width);
-        vs[i + 1] = av_clip(vi + i, 0, height - 1);
-
+        for (j = -1; j < 3; j++) {
+            us[i + 1][j + 1] = mod(ui + j, width);
+            vs[i + 1][j + 1] = av_clip(vi + i, 0, height - 1);
+        }
     }
 }
 
@@ -716,14 +721,14 @@ static void eac_to_xyz(const PanoramaContext *s,
 
 static void xyz_to_eac(const PanoramaContext *s,
                        const float *vec, int width, int height,
-                       uint16_t *us, uint16_t *vs, float *mu, float *nu)
+                       uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu)
 {
     float res = M_PI_4 / (width / 3) / 10.f;
     float uf, vf;
     float rh = height / 2.f;
     float rw = width / 3.f;
     int ui, vi;
-    int i;
+    int i, j;
     int u_shift, v_shift;
     int face;
 
@@ -740,8 +745,10 @@ static void xyz_to_eac(const PanoramaContext *s,
     u_shift = (width  / 3.f) * (face % 3);
     v_shift = (height / 2.f) * (face / 3);
     for (i = -1; i < 3; i++) {
-        us[i + 1] = u_shift + av_clip(ui + i, 0, rw - 1);
-        vs[i + 1] = v_shift + av_clip(vi + i, 0, rh - 1);
+        for (j = -1; j < 3; j++) {
+            us[i + 1][j + 1] = u_shift + av_clip(ui + j, 0, rw - 1);
+            vs[i + 1][j + 1] = v_shift + av_clip(vi + i, 0, rh - 1);
+        }
     }
 }
 
@@ -875,7 +882,7 @@ static int config_output(AVFilterLink *outlink)
     float mirror_modifier[3];
     void (*in_transform)(const PanoramaContext *s,
                          const float *vec, int width, int height,
-                         uint16_t *us, uint16_t *vs, float *mu, float *nu);
+                         uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu);
     void (*out_transform)(const PanoramaContext *s,
                           int i, int j, int width, int height,
                           float *vec);
