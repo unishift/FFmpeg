@@ -916,7 +916,6 @@ static int config_output(AVFilterLink *outlink)
 
     switch (s->in) {
     case EQUIRECTANGULAR:
-    case EQUIANGULAR:
         wf = inlink->w;
         hf = inlink->h;
         break;
@@ -928,13 +927,16 @@ static int config_output(AVFilterLink *outlink)
         wf = inlink->w / 3.f * 2.f;
         hf = inlink->h * 2.f;
         break;
+    case EQUIANGULAR:
+        wf = inlink->w;
+        hf = inlink->h / 9.f * 8.f;
+        break;
     default:
         av_assert0(0);
     }
 
     switch (s->out) {
     case EQUIRECTANGULAR:
-    case EQUIANGULAR:
         w = wf;
         h = hf;
         break;
@@ -949,6 +951,10 @@ static int config_output(AVFilterLink *outlink)
     case FLAT:
         w = wf * s->flat_range[0] / s->flat_range[1] / 2.f;
         h = hf;
+        break;
+    case EQUIANGULAR:
+        w = wf;
+        h = hf / 8.f * 9.f;
         break;
     default:
         av_assert0(0);
