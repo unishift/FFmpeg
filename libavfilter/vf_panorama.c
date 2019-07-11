@@ -579,11 +579,11 @@ static void cube3x2_to_xyz(const PanoramaContext *s,
                            int i, int j, int width, int height,
                            float *vec)
 {
-    int ew = width / 3;
-    int eh = height / 2;
-    int face = (i / ew) + 3 * (j / eh);
-    float uf = 2.f * (i % ew) / ew - 1.f;
-    float vf = 2.f * (j % eh) / eh - 1.f;
+    float ew = width  / 3.f;
+    float eh = height / 2.f;
+    int face = floorf(i / ew) + 3 * floorf(j / eh);
+    float uf = 2.f * fmodf(i, ew) / ew - 1.f;
+    float vf = 2.f * fmodf(j, eh) / eh - 1.f;
 
     cube_to_xyz(s, uf, vf, face, vec);
 }
@@ -595,9 +595,9 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
     float res = M_PI_4 / (width / 3) / 10.f;
     float uf, vf;
     float rh = height / 4.f;
-    float rw = width / 6.f;
+    float rw = width  / 6.f;
     int ui, vi;
-    int u_shift, v_shift;
+    float u_shift, v_shift;
     int i, j;
     int face;
 
@@ -615,8 +615,8 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
     v_shift = (height / 2.f) * (face / 3);
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
-            us[i + 1][j + 1] = u_shift + av_clip(ui + j, 0, 2 * rw - 1);
-            vs[i + 1][j + 1] = v_shift + av_clip(vi + i, 0, 2 * rh - 1);
+            us[i + 1][j + 1] = roundf(u_shift + av_clip(ui + j, 0, ceil(2 * rw - 1)));
+            vs[i + 1][j + 1] = roundf(v_shift + av_clip(vi + i, 0, ceil(2 * rh - 1)));
         }
     }
 }
@@ -625,11 +625,11 @@ static void cube6x1_to_xyz(const PanoramaContext *s,
                            int i, int j, int width, int height,
                            float *vec)
 {
-    int ew = width / 6;
-    int eh = height;
-    int face = i / ew;
-    float uf = 2.f * (i % ew) / ew - 1.f;
-    float vf = 2.f * (j % eh) / eh - 1.f;
+    float ew = width / 6.f;
+    float eh = height;
+    int face = floorf(i / ew);
+    float uf = 2.f * fmodf(i, ew) / ew - 1.f;
+    float vf = 2.f * fmodf(j, eh) / eh - 1.f;
 
     cube_to_xyz(s, uf, vf, face, vec);
 }
@@ -640,10 +640,10 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
 {
     float res = M_PI_4 / (width / 6) / 10.f;
     float uf, vf;
-    float rh = height / 2;
-    float rw = width / 12;
+    float rh = height / 2.f;
+    float rw = width / 12.f;
     int ui, vi;
-    int u_shift;
+    float u_shift;
     int i, j;
     int face;
 
@@ -660,8 +660,8 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
     u_shift = (width / 6.f) * face;
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
-            us[i + 1][j + 1] = u_shift + av_clip(ui + j, 0, 2 * rw - 1);
-            vs[i + 1][j + 1] =           av_clip(vi + i, 0, 2 * rh - 1);
+            us[i + 1][j + 1] = roundf(u_shift + av_clip(ui + j, 0, ceil(2 * rw - 1)));
+            vs[i + 1][j + 1] =                  av_clip(vi + i, 0, ceil(2 * rh - 1));
         }
     }
 }
@@ -713,11 +713,11 @@ static void eac_to_xyz(const PanoramaContext *s,
                        int i, int j, int width, int height,
                        float *vec)
 {
-    int ew = width / 3;
-    int eh = height / 2;
-    int face = (i / ew) + 3 * (j / eh);
-    float uf = tanf(M_PI_2 * ((float)(i % ew) / ew - 0.5f));
-    float vf = tanf(M_PI_2 * ((float)(j % eh) / eh - 0.5f));
+    float ew = width  / 3.f;
+    float eh = height / 2.f;
+    int face = floorf(i / ew) + 3 * floorf(j / eh);
+    float uf = tanf(M_PI_2 * (fmodf(i, ew) / ew - 0.5f));
+    float vf = tanf(M_PI_2 * (fmodf(j, eh) / eh - 0.5f));
     float upad = (float)s->eac_pad / ew;
     float vpad = (float)s->eac_pad / eh;
 
@@ -744,10 +744,10 @@ static void xyz_to_eac(const PanoramaContext *s,
     float res = M_PI_4 / (width / 3) / 10.f;
     float uf, vf;
     float rh = height / 2.f;
-    float rw = width / 3.f;
+    float rw = width  / 3.f;
     int ui, vi;
     int i, j;
-    int u_shift, v_shift;
+    float u_shift, v_shift;
     int face;
     float upad = (float)s->eac_pad / rw;
     float vpad = (float)s->eac_pad / rh;
@@ -779,8 +779,8 @@ static void xyz_to_eac(const PanoramaContext *s,
     v_shift = (height / 2.f) * (face / 3);
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
-            us[i + 1][j + 1] = u_shift + av_clip(ui + j, 0, rw - 1);
-            vs[i + 1][j + 1] = v_shift + av_clip(vi + i, 0, rh - 1);
+            us[i + 1][j + 1] = roundf(u_shift + av_clip(ui + j, 0, ceil(rw - 1.f)));
+            vs[i + 1][j + 1] = roundf(v_shift + av_clip(vi + i, 0, ceil(rh - 1.f)));
         }
     }
 }
