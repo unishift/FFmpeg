@@ -98,6 +98,8 @@ typedef struct PanoramaContext {
     float h_fov, v_fov;
     float flat_range[3];
 
+    int eac_pad;
+
     int planewidth[4], planeheight[4];
     int inplanewidth[4], inplaneheight[4];
     int nb_planes;
@@ -146,6 +148,7 @@ static const AVOption panorama_options[] = {
     {     "hflip", "flip video horizontally",        OFFSET(hflip), AV_OPT_TYPE_BOOL,   {.i64=0},                   0,               1, FLAGS},
     {     "vflip", "flip video vertically",          OFFSET(vflip), AV_OPT_TYPE_BOOL,   {.i64=0},                   0,               1, FLAGS},
     {     "dflip", "flip video indepth",             OFFSET(dflip), AV_OPT_TYPE_BOOL,   {.i64=0},                   0,               1, FLAGS},
+    {   "eac_pad", "padding for EAC (in pixels)",  OFFSET(eac_pad), AV_OPT_TYPE_INT,    {.i64=3},                   0,       INT64_MAX, FLAGS},
     { NULL }
 };
 
@@ -715,6 +718,21 @@ static void eac_to_xyz(const PanoramaContext *s,
     int face = (i / ew) + 3 * (j / eh);
     float uf = tanf(M_PI_2 * ((float)(i % ew) / ew - 0.5f));
     float vf = tanf(M_PI_2 * ((float)(j % eh) / eh - 0.5f));
+    float upad = (float)s->eac_pad / ew;
+    float vpad = (float)s->eac_pad / eh;
+
+    // Process padding
+    switch (face) {
+        case TOP_LEFT:
+        case BOTTOM_LEFT:
+            uf = (1.f + upad) * (uf + 1.f) - 1.f - 2 * upad;
+            break;
+        case TOP_RIGHT:
+        case BOTTOM_RIGHT:
+            uf = (1.f + upad) * (uf + 1.f) - 1.f;
+            break;
+    }
+    vf = (1.f + 2 * vpad) * (vf + 1.f) - 1.f - 2 * vpad;
 
     cube_to_xyz(s, uf, vf, face, vec);
 }
@@ -731,8 +749,23 @@ static void xyz_to_eac(const PanoramaContext *s,
     int i, j;
     int u_shift, v_shift;
     int face;
+    float upad = (float)s->eac_pad / rw;
+    float vpad = (float)s->eac_pad / rh;
 
     xyz_to_cube(s, vec, res, &uf, &vf, &face);
+
+    switch (face) {
+        case TOP_LEFT:
+        case BOTTOM_LEFT:
+            uf = (uf + 1.f + 2 * upad) / (1.f + upad) - 1.f;
+            break;
+        case TOP_RIGHT:
+        case BOTTOM_RIGHT:
+            uf = (uf + 1.f) / (1.f + upad) - 1.f;
+            break;
+    }
+    vf = (vf + 1.f + 2 * vpad) / (1.f + 2 * vpad) - 1.f;
+
     uf = rw * (M_2_PI * atanf(uf) + 0.5f);
     vf = rh * (M_2_PI * atanf(vf) + 0.5f);
 
