@@ -81,6 +81,7 @@ typedef struct PanoramaContext {
     const AVClass *class;
     int in, out;
     int interp;
+    int width, height;
     char* in_forder;
     char* out_forder;
     char* in_frot;
@@ -136,6 +137,8 @@ static const AVOption panorama_options[] = {
     {      "line", "bilinear",                                   0, AV_OPT_TYPE_CONST,  {.i64=BILINEAR},        0,                   0, FLAGS, "interp" },
     {      "cube", "bicubic",                                    0, AV_OPT_TYPE_CONST,  {.i64=BICUBIC},         0,                   0, FLAGS, "interp" },
     {      "lanc", "lanczos",                                    0, AV_OPT_TYPE_CONST,  {.i64=LANCZOS},         0,                   0, FLAGS, "interp" },
+    {         "w", "output width",                   OFFSET(width), AV_OPT_TYPE_INT,    {.i64=0},               0,           INT64_MAX, FLAGS, "w"},
+    {         "h", "output height",                 OFFSET(height), AV_OPT_TYPE_INT,    {.i64=0},               0,           INT64_MAX, FLAGS, "h"},
     { "in_forder", "input cubemap face order",   OFFSET(in_forder), AV_OPT_TYPE_STRING, {.str="default"},       0,     NB_DIRECTIONS-1, FLAGS, "in_forder"},
     {"out_forder", "output cubemap face order", OFFSET(out_forder), AV_OPT_TYPE_STRING, {.str="default"},       0,     NB_DIRECTIONS-1, FLAGS, "out_forder"},
     {   "in_frot", "input cubemap face rotation",  OFFSET(in_frot), AV_OPT_TYPE_STRING, {.str="default"},       0,     NB_DIRECTIONS-1, FLAGS, "in_frot"},
@@ -947,50 +950,55 @@ static int config_output(AVFilterLink *outlink)
         calculate_flat_range(s->h_fov, s->v_fov, s->flat_range);
     }
 
-    switch (s->in) {
-    case EQUIRECTANGULAR:
-        wf = inlink->w;
-        hf = inlink->h;
-        break;
-    case CUBEMAP_3_2:
-        wf = inlink->w / 3.f * 4.f;
-        hf = inlink->h;
-        break;
-    case CUBEMAP_6_1:
-        wf = inlink->w / 3.f * 2.f;
-        hf = inlink->h * 2.f;
-        break;
-    case EQUIANGULAR:
-        wf = inlink->w;
-        hf = inlink->h / 9.f * 8.f;
-        break;
-    default:
-        av_assert0(0);
-    }
+    if (s->width > 0 && s->height > 0) {
+        w = s->width;
+        h = s->height;
+    } else {
+        switch (s->in) {
+        case EQUIRECTANGULAR:
+            wf = inlink->w;
+            hf = inlink->h;
+            break;
+        case CUBEMAP_3_2:
+            wf = inlink->w / 3.f * 4.f;
+            hf = inlink->h;
+            break;
+        case CUBEMAP_6_1:
+            wf = inlink->w / 3.f * 2.f;
+            hf = inlink->h * 2.f;
+            break;
+        case EQUIANGULAR:
+            wf = inlink->w;
+            hf = inlink->h / 9.f * 8.f;
+            break;
+        default:
+            av_assert0(0);
+        }
 
-    switch (s->out) {
-    case EQUIRECTANGULAR:
-        w = wf;
-        h = hf;
-        break;
-    case CUBEMAP_3_2:
-        w = wf / 4.f * 3.f;
-        h = hf;
-        break;
-    case CUBEMAP_6_1:
-        w = wf / 2.f * 3.f;
-        h = hf / 2.f;
-        break;
-    case FLAT:
-        w = wf * s->flat_range[0] / s->flat_range[1] / 2.f;
-        h = hf;
-        break;
-    case EQUIANGULAR:
-        w = wf;
-        h = hf / 8.f * 9.f;
-        break;
-    default:
-        av_assert0(0);
+        switch (s->out) {
+        case EQUIRECTANGULAR:
+            w = wf;
+            h = hf;
+            break;
+        case CUBEMAP_3_2:
+            w = wf / 4.f * 3.f;
+            h = hf;
+            break;
+        case CUBEMAP_6_1:
+            w = wf / 2.f * 3.f;
+            h = hf / 2.f;
+            break;
+        case FLAT:
+            w = wf * s->flat_range[0] / s->flat_range[1] / 2.f;
+            h = hf;
+            break;
+        case EQUIANGULAR:
+            w = wf;
+            h = hf / 8.f * 9.f;
+            break;
+        default:
+            av_assert0(0);
+        }
     }
 
     s->planeheight[1] = s->planeheight[2] = FF_CEIL_RSHIFT(h, desc->log2_chroma_h);
