@@ -432,32 +432,63 @@ static inline int mod(int a, int b)
     }
 }
 
+static inline void rotate_cube_face(float *uf, float *vf, int rotation)
+{
+    float tmp;
+
+    switch (rotation) {
+    case ROT_0:
+        break;
+    case ROT_90:
+        tmp = *uf;
+        *uf = -*vf;
+        *vf = tmp;
+        break;
+    case ROT_180:
+        *uf = -*uf;
+        *vf = -*vf;
+        break;
+    case ROT_270:
+        tmp = -*uf;
+        *uf = *vf;
+        *vf = tmp;
+        break;
+    }
+}
+
+static inline void rotate_cube_face_inverse(float *uf, float *vf, int rotation)
+{
+    float tmp;
+
+    switch (rotation) {
+    case ROT_0:
+        break;
+    case ROT_90:
+        tmp = -*uf;
+        *uf = *vf;
+        *vf = tmp;
+        break;
+    case ROT_180:
+        *uf = -*uf;
+        *vf = -*vf;
+        break;
+    case ROT_270:
+        tmp = *uf;
+        *uf = -*vf;
+        *vf = tmp;
+        break;
+    }
+}
+
 static void cube_to_xyz(const PanoramaContext *s,
                         float uf, float vf, int face,
                         float *vec)
 {
     int direction = s->out_cubemap_direction_order[face];
-    float norm, tmp;
+    float norm;
     float l_x, l_y, l_z;
 
-    switch (s->out_cubemap_face_rotation[face]) {
-    case ROT_0:
-        break;
-    case ROT_90:
-        tmp = -uf;
-        uf = vf;
-        vf = tmp;
-        break;
-    case ROT_180:
-        uf = -uf;
-        vf = -vf;
-        break;
-    case ROT_270:
-        tmp = uf;
-        uf = -vf;
-        vf = tmp;
-        break;
-    }
+    rotate_cube_face_inverse(&uf, &vf, s->out_cubemap_face_rotation[face]);
 
     switch (direction) {
     case RIGHT:
@@ -500,37 +531,35 @@ static void cube_to_xyz(const PanoramaContext *s,
 
 static void xyz_to_cube(const PanoramaContext *s,
                         const float *vec, float res,
-                        float *uf, float *vf, int *face)
+                        float *uf, float *vf, int *direction)
 {
     float phi   = atan2f(vec[0], -vec[2]);
     float theta = asinf(-vec[1]);
     float phi_norm, theta_threshold;
-    float tmp;
-    int direction;
+    int face;
 
     if (in_range(phi, -M_PI_4, M_PI_4, res)) {
-        direction = FRONT;
+        *direction = FRONT;
         phi_norm = phi;
     } else if (in_range(phi, -(M_PI_2 + M_PI_4), -M_PI_4, res)) {
-        direction = LEFT;
+        *direction = LEFT;
         phi_norm = phi + M_PI_2;
     } else if (in_range(phi, M_PI_4, M_PI_2 + M_PI_4, res)) {
-        direction = RIGHT;
+        *direction = RIGHT;
         phi_norm = phi - M_PI_2;
     } else {
-        direction = BACK;
+        *direction = BACK;
         phi_norm = phi + ((phi > 0.f) ? -M_PI : M_PI);
     }
 
     theta_threshold = atan2f(1.f, 1.f / cosf(phi_norm));
     if (theta > theta_threshold) {
-        direction = DOWN;
+        *direction = DOWN;
     } else if (theta < -theta_threshold) {
-        direction = UP;
+        *direction = UP;
     }
 
-    *face = s->in_cubemap_face_order[direction];
-    switch (direction) {
+    switch (*direction) {
     case RIGHT:
         *uf =  vec[2] / vec[0];
         *vf = -vec[1] / vec[0];
@@ -557,25 +586,190 @@ static void xyz_to_cube(const PanoramaContext *s,
         break;
     }
 
-    switch (s->in_cubemap_face_rotation[*face]) {
-    case ROT_0:
-        break;
-    case ROT_90:
-        tmp = *uf;
-        *uf = -*vf;
-        *vf = tmp;
-        break;
-    case ROT_180:
-        *uf = -*uf;
-        *vf = -*vf;
-        break;
-    case ROT_270:
-        tmp = -*uf;
-        *uf = *vf;
-        *vf = tmp;
-        break;
+    face = s->in_cubemap_face_order[*direction];
+    rotate_cube_face(uf, vf, s->in_cubemap_face_rotation[face]);
+}
+
+/*
+ *  Default cubemap
+ *
+ *           width
+ *         <------->
+ *         +-------+
+ *         |       |                              U
+ *         | up    |                   h       ------->
+ * +-------+-------+-------+-------+ ^ e      |
+ * |       |       |       |       | | i    V |
+ * | left  | front | right | back  | | g      |
+ * +-------+-------+-------+-------+ v h      v
+ *         |       |                   t
+ *         | down  |
+ *         +-------+
+ */
+static void process_cube_coordinates(const PanoramaContext *s,
+                                int u, int v, int direction, float width, float height,
+                                int *new_u, int *new_v, int *face)
+{
+    float uf = 2.f * u / width  - 1.f;
+    float vf = 2.f * v / height - 1.f;
+    float new_uf, new_vf;
+
+    *face = s->in_cubemap_face_order[direction];
+    rotate_cube_face_inverse(&uf, &vf, s->in_cubemap_face_rotation[*face]);
+
+    if ((uf < -1.f || uf >= 1.f) && (vf < -1.f || vf >= 1.f)) {
+        // There are no pixels to use in this case
+        *new_u = av_clip(u, 0, width - 1);
+        *new_v = av_clip(v, 0, height - 1);
+        return;
+    } else if (uf < -1.f) {
+        uf += 2.f;
+        switch (direction) {
+        case RIGHT:
+            direction = FRONT;
+            new_uf = uf;
+            new_vf = vf;
+            break;
+        case LEFT:
+            direction = BACK;
+            new_uf = uf;
+            new_vf = vf;
+            break;
+        case UP:
+            direction = LEFT;
+            new_uf = vf;
+            new_vf = -uf;
+            break;
+        case DOWN:
+            direction = LEFT;
+            new_uf = -vf;
+            new_vf = uf;
+            break;
+        case FRONT:
+            direction = LEFT;
+            new_uf = uf;
+            new_vf = vf;
+            break;
+        case BACK:
+            direction = RIGHT;
+            new_uf = uf;
+            new_vf = vf;
+            break;
+        }
+    } else if (uf >= 1.f) {
+        uf -= 2.f;
+        switch (direction) {
+        case RIGHT:
+            direction = BACK;
+            new_uf = uf;
+            new_vf = vf;
+            break;
+        case LEFT:
+            direction = FRONT;
+            new_uf = uf;
+            new_vf = vf;
+            break;
+        case UP:
+            direction = RIGHT;
+            new_uf = -vf;
+            new_vf = uf;
+            break;
+        case DOWN:
+            direction = RIGHT;
+            new_uf = vf;
+            new_vf = -uf;
+            break;
+        case FRONT:
+            direction = RIGHT;
+            new_uf = uf;
+            new_vf = vf;
+            break;
+        case BACK:
+            direction = LEFT;
+            new_uf = uf;
+            new_vf = vf;
+            break;
+        }
+    } else if (vf < -1.f) {
+        vf += 2.f;
+        switch (direction) {
+        case RIGHT:
+            direction = UP;
+            new_uf = vf;
+            new_vf = -uf;
+            break;
+        case LEFT:
+            direction = UP;
+            new_uf = -vf;
+            new_vf = uf;
+            break;
+        case UP:
+            direction = BACK;
+            new_uf = -uf;
+            new_vf = -vf;
+            break;
+        case DOWN:
+            direction = FRONT;
+            new_uf = uf;
+            new_vf = vf;
+            break;
+        case FRONT:
+            direction = UP;
+            new_uf = uf;
+            new_vf = vf;
+            break;
+        case BACK:
+            direction = UP;
+            new_uf = -uf;
+            new_vf = -vf;
+            break;
+        }
+    } else if (vf >= 1.f) {
+        vf -= 2.f;
+        switch (direction) {
+        case RIGHT:
+            direction = DOWN;
+            new_uf = -vf;
+            new_vf = uf;
+            break;
+        case LEFT:
+            direction = DOWN;
+            new_uf = vf;
+            new_vf = -uf;
+            break;
+        case UP:
+            direction = FRONT;
+            new_uf = uf;
+            new_vf = vf;
+            break;
+        case DOWN:
+            direction = BACK;
+            new_uf = -uf;
+            new_vf = -vf;
+            break;
+        case FRONT:
+            direction = DOWN;
+            new_uf = uf;
+            new_vf = vf;
+            break;
+        case BACK:
+            direction = DOWN;
+            new_uf = -uf;
+            new_vf = -vf;
+            break;
+        }
+    } else {
+        // Inside cube face
+        *new_u = u;
+        *new_v = v;
+        return;
     }
 
+    *face = s->in_cubemap_face_order[direction];
+    rotate_cube_face(&new_uf, &new_vf, s->in_cubemap_face_rotation[*face]);
+
+    *new_u = av_clip(roundf(width  * (new_uf + 1.f) / 2.f), 0, width - 1);
+    *new_v = av_clip(roundf(height * (new_vf + 1.f) / 2.f), 0, height - 1);
 }
 
 static void cube3x2_to_xyz(const PanoramaContext *s,
@@ -600,11 +794,10 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
     float rh = height / 4.f;
     float rw = width  / 6.f;
     int ui, vi;
-    float u_shift, v_shift;
     int i, j;
-    int face;
+    int direction;
 
-    xyz_to_cube(s, vec, res, &uf, &vf, &face);
+    xyz_to_cube(s, vec, res, &uf, &vf, &direction);
     uf = rw * (uf + 1.f);
     vf = rh * (vf + 1.f);
 
@@ -614,12 +807,18 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
     *mu = uf - ui;
     *nu = vf - vi;
 
-    u_shift = (width  / 3.f) * (face % 3);
-    v_shift = (height / 2.f) * (face / 3);
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
-            us[i + 1][j + 1] = roundf(u_shift + av_clip(ui + j, 0, ceil(2 * rw - 1)));
-            vs[i + 1][j + 1] = roundf(v_shift + av_clip(vi + i, 0, ceil(2 * rh - 1)));
+            int u, v;
+            float u_shift, v_shift;
+            int face;
+
+            process_cube_coordinates(s, ui + j, vi + i, direction, 2 * rw, 2 * rh, &u, &v, &face);
+            u_shift = (width  / 3.f) * (face % 3);
+            v_shift = (height / 2.f) * (face / 3);
+
+            us[i + 1][j + 1] = roundf(u_shift + u);
+            vs[i + 1][j + 1] = roundf(v_shift + v);
         }
     }
 }
@@ -646,11 +845,10 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
     float rh = height / 2.f;
     float rw = width / 12.f;
     int ui, vi;
-    float u_shift;
     int i, j;
-    int face;
+    int direction;
 
-    xyz_to_cube(s, vec, res, &uf, &vf, &face);
+    xyz_to_cube(s, vec, res, &uf, &vf, &direction);
     uf = rw * (uf + 1.f);
     vf = rh * (vf + 1.f);
 
@@ -660,11 +858,17 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
     *mu = uf - ui;
     *nu = vf - vi;
 
-    u_shift = (width / 6.f) * face;
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
-            us[i + 1][j + 1] = roundf(u_shift + av_clip(ui + j, 0, ceil(2 * rw - 1)));
-            vs[i + 1][j + 1] =                  av_clip(vi + i, 0, ceil(2 * rh - 1));
+            int u, v;
+            float u_shift;
+            int face;
+
+            process_cube_coordinates(s, ui + j, vi + i, direction, 2 * rw, 2 * rh, &u, &v, &face);
+            u_shift = (width / 6.f) * (face % 6);
+
+            us[i + 1][j + 1] = roundf(u_shift + u);
+            vs[i + 1][j + 1] = v;
         }
     }
 }
@@ -750,13 +954,14 @@ static void xyz_to_eac(const PanoramaContext *s,
     float rw = width  / 3.f;
     int ui, vi;
     int i, j;
+    int face, direction;
     float u_shift, v_shift;
-    int face;
     float upad = (float)s->eac_pad / rw;
     float vpad = (float)s->eac_pad / rh;
 
-    xyz_to_cube(s, vec, res, &uf, &vf, &face);
+    xyz_to_cube(s, vec, res, &uf, &vf, &direction);
 
+    face = s->in_cubemap_face_order[direction];
     switch (face) {
         case TOP_LEFT:
         case BOTTOM_LEFT:
