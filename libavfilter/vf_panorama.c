@@ -607,53 +607,48 @@ static void xyz_to_cube(const PanoramaContext *s,
  *         +-------+
  */
 static void process_cube_coordinates(const PanoramaContext *s,
-                                int u, int v, int direction, float width, float height,
-                                int *new_u, int *new_v, int *face)
+                                float uf, float vf, int direction,
+                                float *new_uf, float *new_vf, int *face)
 {
-    float uf = 2.f * u / width  - 1.f;
-    float vf = 2.f * v / height - 1.f;
-    float new_uf, new_vf;
-
     *face = s->in_cubemap_face_order[direction];
     rotate_cube_face_inverse(&uf, &vf, s->in_cubemap_face_rotation[*face]);
 
     if ((uf < -1.f || uf >= 1.f) && (vf < -1.f || vf >= 1.f)) {
         // There are no pixels to use in this case
-        *new_u = av_clip(u, 0, width - 1);
-        *new_v = av_clip(v, 0, height - 1);
-        return;
+        *new_uf = uf;
+        *new_vf = vf;
     } else if (uf < -1.f) {
         uf += 2.f;
         switch (direction) {
         case RIGHT:
             direction = FRONT;
-            new_uf = uf;
-            new_vf = vf;
+            *new_uf = uf;
+            *new_vf = vf;
             break;
         case LEFT:
             direction = BACK;
-            new_uf = uf;
-            new_vf = vf;
+            *new_uf = uf;
+            *new_vf = vf;
             break;
         case UP:
             direction = LEFT;
-            new_uf = vf;
-            new_vf = -uf;
+            *new_uf = vf;
+            *new_vf = -uf;
             break;
         case DOWN:
             direction = LEFT;
-            new_uf = -vf;
-            new_vf = uf;
+            *new_uf = -vf;
+            *new_vf = uf;
             break;
         case FRONT:
             direction = LEFT;
-            new_uf = uf;
-            new_vf = vf;
+            *new_uf = uf;
+            *new_vf = vf;
             break;
         case BACK:
             direction = RIGHT;
-            new_uf = uf;
-            new_vf = vf;
+            *new_uf = uf;
+            *new_vf = vf;
             break;
         }
     } else if (uf >= 1.f) {
@@ -661,33 +656,33 @@ static void process_cube_coordinates(const PanoramaContext *s,
         switch (direction) {
         case RIGHT:
             direction = BACK;
-            new_uf = uf;
-            new_vf = vf;
+            *new_uf = uf;
+            *new_vf = vf;
             break;
         case LEFT:
             direction = FRONT;
-            new_uf = uf;
-            new_vf = vf;
+            *new_uf = uf;
+            *new_vf = vf;
             break;
         case UP:
             direction = RIGHT;
-            new_uf = -vf;
-            new_vf = uf;
+            *new_uf = -vf;
+            *new_vf = uf;
             break;
         case DOWN:
             direction = RIGHT;
-            new_uf = vf;
-            new_vf = -uf;
+            *new_uf = vf;
+            *new_vf = -uf;
             break;
         case FRONT:
             direction = RIGHT;
-            new_uf = uf;
-            new_vf = vf;
+            *new_uf = uf;
+            *new_vf = vf;
             break;
         case BACK:
             direction = LEFT;
-            new_uf = uf;
-            new_vf = vf;
+            *new_uf = uf;
+            *new_vf = vf;
             break;
         }
     } else if (vf < -1.f) {
@@ -695,33 +690,33 @@ static void process_cube_coordinates(const PanoramaContext *s,
         switch (direction) {
         case RIGHT:
             direction = UP;
-            new_uf = vf;
-            new_vf = -uf;
+            *new_uf = vf;
+            *new_vf = -uf;
             break;
         case LEFT:
             direction = UP;
-            new_uf = -vf;
-            new_vf = uf;
+            *new_uf = -vf;
+            *new_vf = uf;
             break;
         case UP:
             direction = BACK;
-            new_uf = -uf;
-            new_vf = -vf;
+            *new_uf = -uf;
+            *new_vf = -vf;
             break;
         case DOWN:
             direction = FRONT;
-            new_uf = uf;
-            new_vf = vf;
+            *new_uf = uf;
+            *new_vf = vf;
             break;
         case FRONT:
             direction = UP;
-            new_uf = uf;
-            new_vf = vf;
+            *new_uf = uf;
+            *new_vf = vf;
             break;
         case BACK:
             direction = UP;
-            new_uf = -uf;
-            new_vf = -vf;
+            *new_uf = -uf;
+            *new_vf = -vf;
             break;
         }
     } else if (vf >= 1.f) {
@@ -729,47 +724,43 @@ static void process_cube_coordinates(const PanoramaContext *s,
         switch (direction) {
         case RIGHT:
             direction = DOWN;
-            new_uf = -vf;
-            new_vf = uf;
+            *new_uf = -vf;
+            *new_vf = uf;
             break;
         case LEFT:
             direction = DOWN;
-            new_uf = vf;
-            new_vf = -uf;
+            *new_uf = vf;
+            *new_vf = -uf;
             break;
         case UP:
             direction = FRONT;
-            new_uf = uf;
-            new_vf = vf;
+            *new_uf = uf;
+            *new_vf = vf;
             break;
         case DOWN:
             direction = BACK;
-            new_uf = -uf;
-            new_vf = -vf;
+            *new_uf = -uf;
+            *new_vf = -vf;
             break;
         case FRONT:
             direction = DOWN;
-            new_uf = uf;
-            new_vf = vf;
+            *new_uf = uf;
+            *new_vf = vf;
             break;
         case BACK:
             direction = DOWN;
-            new_uf = -uf;
-            new_vf = -vf;
+            *new_uf = -uf;
+            *new_vf = -vf;
             break;
         }
     } else {
         // Inside cube face
-        *new_u = u;
-        *new_v = v;
-        return;
+        *new_uf = uf;
+        *new_vf = vf;
     }
 
     *face = s->in_cubemap_face_order[direction];
-    rotate_cube_face(&new_uf, &new_vf, s->in_cubemap_face_rotation[*face]);
-
-    *new_u = av_clip(roundf(width  * (new_uf + 1.f) / 2.f), 0, width - 1);
-    *new_v = av_clip(roundf(height * (new_vf + 1.f) / 2.f), 0, height - 1);
+    rotate_cube_face(new_uf, new_vf, s->in_cubemap_face_rotation[*face]);
 }
 
 static void cube3x2_to_xyz(const PanoramaContext *s,
@@ -778,11 +769,16 @@ static void cube3x2_to_xyz(const PanoramaContext *s,
 {
     float ew = width  / 3.f;
     float eh = height / 2.f;
-    int face = floorf(i / ew) + 3 * floorf(j / eh);
-    float uf = 2.f * fmodf(i, ew) / ew - 1.f;
-    float vf = 2.f * fmodf(j, eh) / eh - 1.f;
+    int u_face = floorf(i / ew);
+    int v_face = floorf(j / eh);
+    int ushift = ceilf(ew * u_face);
+    int vshift = ceilf(eh * v_face);
+    int ewi = ceilf(ew * (u_face + 1)) - ushift;
+    int ehi = ceilf(eh * (v_face + 1)) - vshift;
+    float uf = 2.f * (i - ushift) / ewi - 1.f;
+    float vf = 2.f * (j - vshift) / ehi - 1.f;
 
-    cube_to_xyz(s, uf, vf, face, vec);
+    cube_to_xyz(s, uf, vf, u_face + 3 * v_face, vec);
 }
 
 static void xyz_to_cube3x2(const PanoramaContext *s,
@@ -791,15 +787,24 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
 {
     float res = M_PI_4 / (width / 3) / 10.f;
     float uf, vf;
-    float rh = height / 4.f;
-    float rw = width  / 6.f;
+    float ew = width  / 3.f;
+    float eh = height / 2.f;
     int ui, vi;
+    int ewi, ehi;
     int i, j;
-    int direction;
+    int direction, face;
+    int u_face, v_face;
 
     xyz_to_cube(s, vec, res, &uf, &vf, &direction);
-    uf = rw * (uf + 1.f);
-    vf = rh * (vf + 1.f);
+
+    face = s->in_cubemap_face_order[direction];
+    u_face = face % 3;
+    v_face = face / 3;
+    ewi = ceilf(ew * (u_face + 1)) - ceilf(ew * u_face);
+    ehi = ceilf(eh * (v_face + 1)) - ceilf(eh * v_face);
+
+    uf = 0.5f * ewi * (uf + 1.f);
+    vf = 0.5f * ehi * (vf + 1.f);
 
     ui = floorf(uf);
     vi = floorf(vf);
@@ -809,16 +814,22 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
 
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
-            int u, v;
-            float u_shift, v_shift;
-            int face;
+            float u, v;
+            int u_shift, v_shift;
+            int new_ewi, new_ehi;
 
-            process_cube_coordinates(s, ui + j, vi + i, direction, 2 * rw, 2 * rh, &u, &v, &face);
-            u_shift = (width  / 3.f) * (face % 3);
-            v_shift = (height / 2.f) * (face / 3);
+            process_cube_coordinates(s, 2.f * (ui + j) / ewi - 1.f,
+                                        2.f * (vi + i) / ehi - 1.f,
+                                        direction, &u, &v, &face);
+            u_face = face % 3;
+            v_face = face / 3;
+            u_shift = ceilf(ew * u_face);
+            v_shift = ceilf(eh * v_face);
+            new_ewi = ceilf(ew * (u_face + 1)) - u_shift;
+            new_ehi = ceilf(eh * (v_face + 1)) - v_shift;
 
-            us[i + 1][j + 1] = roundf(u_shift + u);
-            vs[i + 1][j + 1] = roundf(v_shift + v);
+            us[i + 1][j + 1] = u_shift + av_clip(roundf(0.5f * new_ewi * (u + 1.f)), 0, new_ewi - 1);
+            vs[i + 1][j + 1] = v_shift + av_clip(roundf(0.5f * new_ehi * (v + 1.f)), 0, new_ehi - 1);
         }
     }
 }
@@ -830,8 +841,10 @@ static void cube6x1_to_xyz(const PanoramaContext *s,
     float ew = width / 6.f;
     float eh = height;
     int face = floorf(i / ew);
-    float uf = 2.f * fmodf(i, ew) / ew - 1.f;
-    float vf = 2.f * fmodf(j, eh) / eh - 1.f;
+    int u_shift = ceilf(ew * face);
+    int ewi = ceilf(ew * (face + 1)) - u_shift;
+    float uf = 2.f * (i - u_shift) / ewi - 1.f;
+    float vf = 2.f *  j            / eh  - 1.f;
 
     cube_to_xyz(s, uf, vf, face, vec);
 }
@@ -842,15 +855,20 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
 {
     float res = M_PI_4 / (width / 6) / 10.f;
     float uf, vf;
-    float rh = height / 2.f;
-    float rw = width / 12.f;
+    float ew = width / 6.f;
+    float eh = height;
     int ui, vi;
+    int ewi;
     int i, j;
-    int direction;
+    int direction, face;
 
     xyz_to_cube(s, vec, res, &uf, &vf, &direction);
-    uf = rw * (uf + 1.f);
-    vf = rh * (vf + 1.f);
+
+    face = s->in_cubemap_face_order[direction];
+    ewi = ceilf(ew * (face + 1)) - ceilf(ew * face);
+
+    uf = ewi * (uf + 1.f);
+    vf = eh  * (vf + 1.f);
 
     ui = floorf(uf);
     vi = floorf(vf);
@@ -860,14 +878,17 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
 
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
-            int u, v;
-            float u_shift;
-            int face;
+            float u, v;
+            int u_shift;
+            int new_ewi;
 
-            process_cube_coordinates(s, ui + j, vi + i, direction, 2 * rw, 2 * rh, &u, &v, &face);
-            u_shift = (width / 6.f) * (face % 6);
+            process_cube_coordinates(s, 2.f * (ui + j) / ewi - 1.f,
+                                        2.f * (vi + i) / eh  - 1.f,
+                                        direction, &u, &v, &face);
+            u_shift = ceilf(ew * face);
+            new_ewi = ceilf(ew * (face + 1)) - u_shift;
 
-            us[i + 1][j + 1] = roundf(u_shift + u);
+            us[i + 1][j + 1] = u_shift + av_clip(roundf(0.5f * new_ewi * (u + 1.f)), 0, new_ewi - 1);
             vs[i + 1][j + 1] = v;
         }
     }
