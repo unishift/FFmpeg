@@ -99,8 +99,6 @@ typedef struct PanoramaContext {
     float h_fov, v_fov;
     float flat_range[3];
 
-    int eac_pad;
-
     int planewidth[4], planeheight[4];
     int inplanewidth[4], inplaneheight[4];
     int nb_planes;
@@ -151,7 +149,6 @@ static const AVOption panorama_options[] = {
     {     "hflip", "flip video horizontally",        OFFSET(hflip), AV_OPT_TYPE_BOOL,   {.i64=0},                   0,               1, FLAGS},
     {     "vflip", "flip video vertically",          OFFSET(vflip), AV_OPT_TYPE_BOOL,   {.i64=0},                   0,               1, FLAGS},
     {     "dflip", "flip video indepth",             OFFSET(dflip), AV_OPT_TYPE_BOOL,   {.i64=0},                   0,               1, FLAGS},
-    {   "eac_pad", "padding for EAC (in pixels)",  OFFSET(eac_pad), AV_OPT_TYPE_INT,    {.i64=3},                   0,       INT64_MAX, FLAGS},
     { NULL }
 };
 
@@ -1131,8 +1128,8 @@ static void eac_to_xyz(const PanoramaContext *s,
     int face = floorf(i / ew) + 3 * floorf(j / eh);
     float uf = tanf(M_PI_2 * (fmodf(i, ew) / ew - 0.5f));
     float vf = tanf(M_PI_2 * (fmodf(j, eh) / eh - 0.5f));
-    float upad = (float)s->eac_pad / ew;
-    float vpad = (float)s->eac_pad / eh;
+    float upad = 3.f / ew;
+    float vpad = 3.f / eh;
 
     // Process padding
     switch (face) {
@@ -1162,8 +1159,8 @@ static void xyz_to_eac(const PanoramaContext *s,
     int i, j;
     int face, direction;
     float u_shift, v_shift;
-    float upad = (float)s->eac_pad / rw;
-    float vpad = (float)s->eac_pad / rh;
+    float upad = 3.f / rw;
+    float vpad = 3.f / rh;
 
     xyz_to_cube(s, vec, res, &uf, &vf, &direction);
 
