@@ -1011,8 +1011,8 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
     face = s->in_cubemap_face_order[direction];
     ewi = ceilf(ew * (face + 1)) - ceilf(ew * face);
 
-    uf = ewi * (uf + 1.f);
-    vf = eh  * (vf + 1.f);
+    uf = 0.5f * ewi * (uf + 1.f);
+    vf = 0.5f * eh  * (vf + 1.f);
 
     ui = floorf(uf);
     vi = floorf(vf);
@@ -1033,7 +1033,7 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
             new_ewi = ceilf(ew * (face + 1)) - u_shift;
 
             us[i + 1][j + 1] = u_shift + av_clip(roundf(0.5f * new_ewi * (u + 1.f)), 0, new_ewi - 1);
-            vs[i + 1][j + 1] = v;
+            vs[i + 1][j + 1] =           av_clip(roundf(0.5f * eh      * (v + 1.f)), 0, eh      - 1);
         }
     }
 }
