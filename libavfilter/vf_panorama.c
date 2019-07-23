@@ -1125,11 +1125,17 @@ static void eac_to_xyz(const PanoramaContext *s,
 {
     float ew = width  / 3.f;
     float eh = height / 2.f;
-    int face = floorf(i / ew) + 3 * floorf(j / eh);
-    float uf = tanf(M_PI_2 * (fmodf(i, ew) / ew - 0.5f));
-    float vf = tanf(M_PI_2 * (fmodf(j, eh) / eh - 0.5f));
-    float upad = 3.f / ew;
-    float vpad = 3.f / eh;
+    int u_face = floorf(i / ew);
+    int v_face = floorf(j / eh);
+    int face = u_face + 3 * v_face;
+    int u_shift = ceilf(ew * u_face);
+    int v_shift = ceilf(eh * v_face);
+    int ewi = ceilf(ew * (u_face + 1)) - u_shift;
+    int ehi = ceilf(eh * (v_face + 1)) - v_shift;
+    float uf = tanf(M_PI_2 * ((0.5f + i - u_shift) / ewi - 0.5f));
+    float vf = tanf(M_PI_2 * ((0.5f + j - v_shift) / ehi - 0.5f));
+    float upad = 3.f / ewi;
+    float vpad = 3.f / ehi;
 
     // Process padding
     switch (face) {
@@ -1153,14 +1159,16 @@ static void xyz_to_eac(const PanoramaContext *s,
 {
     float res = M_PI_4 / (width / 3) / 10.f;
     float uf, vf;
-    float rh = height / 2.f;
-    float rw = width  / 3.f;
+    float ew = width  / 3.f;
+    float eh = height / 2.f;
     int ui, vi;
     int i, j;
     int face, direction;
-    float u_shift, v_shift;
-    float upad = 3.f / rw;
-    float vpad = 3.f / rh;
+    int u_face, v_face;
+    int u_shift, v_shift;
+    int ewi, ehi;
+    float upad = 3.f / ew;
+    float vpad = 3.f / eh;
 
     xyz_to_cube(s, vec, res, &uf, &vf, &direction);
 
@@ -1177,8 +1185,15 @@ static void xyz_to_eac(const PanoramaContext *s,
     }
     vf = (vf + 1.f + 2 * vpad) / (1.f + 2 * vpad) - 1.f;
 
-    uf = rw * (M_2_PI * atanf(uf) + 0.5f);
-    vf = rh * (M_2_PI * atanf(vf) + 0.5f);
+    u_face = face % 3;
+    v_face = face / 3;
+    u_shift = ceilf(ew * u_face);
+    v_shift = ceilf(eh * v_face);
+    ewi = ceilf(ew * (u_face + 1)) - u_shift;
+    ehi = ceilf(eh * (v_face + 1)) - v_shift;
+
+    uf = ewi * (M_2_PI * atanf(uf) + 0.5f) - 0.5f;
+    vf = ehi * (M_2_PI * atanf(vf) + 0.5f) - 0.5f;
 
     ui = floorf(uf);
     vi = floorf(vf);
@@ -1186,12 +1201,10 @@ static void xyz_to_eac(const PanoramaContext *s,
     *mu = uf - ui;
     *nu = vf - vi;
 
-    u_shift = (width  / 3.f) * (face % 3);
-    v_shift = (height / 2.f) * (face / 3);
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
-            us[i + 1][j + 1] = roundf(u_shift + av_clip(ui + j, 0, ceil(rw - 1.f)));
-            vs[i + 1][j + 1] = roundf(v_shift + av_clip(vi + i, 0, ceil(rh - 1.f)));
+            us[i + 1][j + 1] = u_shift + ui + j;
+            vs[i + 1][j + 1] = v_shift + vi + i;
         }
     }
 }
