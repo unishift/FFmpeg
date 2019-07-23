@@ -432,6 +432,153 @@ static inline int mod(int a, int b)
     }
 }
 
+static int get_direction(char c)
+{
+    switch (c) {
+    case 'r':
+        return RIGHT;
+    case 'l':
+        return LEFT;
+    case 'u':
+        return UP;
+    case 'd':
+        return DOWN;
+    case 'f':
+        return FRONT;
+    case 'b':
+        return BACK;
+    default:
+        return -1;
+    }
+}
+
+static int get_rotation(char c)
+{
+    switch (c) {
+        case '0':
+            return ROT_0;
+        case '1':
+            return ROT_90;
+        case '2':
+            return ROT_180;
+        case '3':
+            return ROT_270;
+        default:
+            return -1;
+    }
+}
+
+static int prepare_cube_in(PanoramaContext *s)
+{
+    if (strcmp(s->in_forder, "default") == 0) {
+        s->in_cubemap_face_order[RIGHT] = TOP_LEFT;
+        s->in_cubemap_face_order[LEFT] = TOP_MIDDLE;
+        s->in_cubemap_face_order[UP] = TOP_RIGHT;
+        s->in_cubemap_face_order[DOWN] = BOTTOM_LEFT;
+        s->in_cubemap_face_order[FRONT] = BOTTOM_MIDDLE;
+        s->in_cubemap_face_order[BACK] = BOTTOM_RIGHT;
+    } else {
+        for (int face = 0; face < NB_FACES; face++) {
+            const char c = s->in_forder[face];
+            int direction;
+            if (c == '\0') {
+                return AVERROR(EINVAL);
+            }
+
+            direction = get_direction(c);
+            if (direction == -1) {
+                return AVERROR(EINVAL);
+            }
+
+            s->in_cubemap_face_order[direction] = face;
+        }
+    }
+
+    if (strcmp(s->in_frot, "default") == 0) {
+        s->in_cubemap_face_rotation[TOP_LEFT] = ROT_0;
+        s->in_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
+        s->in_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
+        s->in_cubemap_face_rotation[BOTTOM_LEFT] = ROT_0;
+        s->in_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_0;
+        s->in_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_0;
+    } else {
+        for (int face = 0; face < NB_FACES; face++) {
+            const char c = s->in_frot[face];
+            int rotation;
+
+            if (c == '\0') {
+                return AVERROR(EINVAL);
+            }
+
+            rotation = get_rotation(c);
+            if (rotation == -1) {
+                return AVERROR(EINVAL);
+            }
+
+            s->in_cubemap_face_rotation[face] = rotation;
+        }
+    }
+
+    return 0;
+}
+
+static int prepare_cube_out(PanoramaContext *s)
+{
+    if (strcmp(s->out_forder, "default") == 0) {
+        s->out_cubemap_direction_order[TOP_LEFT] = RIGHT;
+        s->out_cubemap_direction_order[TOP_MIDDLE] = LEFT;
+        s->out_cubemap_direction_order[TOP_RIGHT] = UP;
+        s->out_cubemap_direction_order[BOTTOM_LEFT] = DOWN;
+        s->out_cubemap_direction_order[BOTTOM_MIDDLE] = FRONT;
+        s->out_cubemap_direction_order[BOTTOM_RIGHT] = BACK;
+    } else {
+        for (int face = 0; face < NB_FACES; face++) {
+            const char c = s->out_forder[face];
+            int direction;
+
+            if (c == '\0') {
+                av_assert0(0);
+                return AVERROR(EINVAL);
+            }
+
+            direction = get_direction(c);
+            if (direction == -1) {
+                av_assert0(0);
+                return AVERROR(EINVAL);
+            }
+
+            s->out_cubemap_direction_order[face] = direction;
+        }
+    }
+
+    if (strcmp(s->out_frot, "default") == 0) {
+        s->out_cubemap_face_rotation[TOP_LEFT] = ROT_0;
+        s->out_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
+        s->out_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
+        s->out_cubemap_face_rotation[BOTTOM_LEFT] = ROT_0;
+        s->out_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_0;
+        s->out_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_0;
+    } else {
+        for (int face = 0; face < NB_FACES; face++) {
+            const char c = s->out_frot[face];
+            int rotation;
+
+            if (c == '\0') {
+                return AVERROR(EINVAL);
+            }
+
+            rotation = get_rotation(c);
+            if (rotation == -1) {
+                return AVERROR(EINVAL);
+            }
+
+            s->out_cubemap_face_rotation[face] = rotation;
+        }
+    }
+
+    return 0;
+}
+
 static inline void rotate_cube_face(float *uf, float *vf, int rotation)
 {
     float tmp;
@@ -937,6 +1084,44 @@ static void xyz_to_equirect(const PanoramaContext *s,
     }
 }
 
+static int prepare_eac_in(PanoramaContext *s)
+{
+    s->in_cubemap_face_order[RIGHT] = TOP_RIGHT;
+    s->in_cubemap_face_order[LEFT] = TOP_LEFT;
+    s->in_cubemap_face_order[UP] = BOTTOM_RIGHT;
+    s->in_cubemap_face_order[DOWN] = BOTTOM_LEFT;
+    s->in_cubemap_face_order[FRONT] = TOP_MIDDLE;
+    s->in_cubemap_face_order[BACK] = BOTTOM_MIDDLE;
+
+    s->in_cubemap_face_rotation[TOP_LEFT] = ROT_0;
+    s->in_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
+    s->in_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
+    s->in_cubemap_face_rotation[BOTTOM_LEFT] = ROT_270;
+    s->in_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_90;
+    s->in_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_270;
+
+    return 0;
+}
+
+static int prepare_eac_out(PanoramaContext *s)
+{
+    s->out_cubemap_direction_order[TOP_LEFT] = LEFT;
+    s->out_cubemap_direction_order[TOP_MIDDLE] = FRONT;
+    s->out_cubemap_direction_order[TOP_RIGHT] = RIGHT;
+    s->out_cubemap_direction_order[BOTTOM_LEFT] = DOWN;
+    s->out_cubemap_direction_order[BOTTOM_MIDDLE] = BACK;
+    s->out_cubemap_direction_order[BOTTOM_RIGHT] = UP;
+
+    s->out_cubemap_face_rotation[TOP_LEFT] = ROT_0;
+    s->out_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
+    s->out_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
+    s->out_cubemap_face_rotation[BOTTOM_LEFT] = ROT_270;
+    s->out_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_90;
+    s->out_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_270;
+
+    return 0;
+}
+
 static void eac_to_xyz(const PanoramaContext *s,
                        int i, int j, int width, int height,
                        float *vec)
@@ -1014,20 +1199,21 @@ static void xyz_to_eac(const PanoramaContext *s,
     }
 }
 
-static inline void calculate_flat_range(float h_fov, float v_fov,
-                                        float *range)
+static int prepare_flat_out(PanoramaContext *s)
 {
-    const float h_angle = h_fov * M_PI / 360.f;
-    const float v_angle = v_fov * M_PI / 360.f;
+    const float h_angle = s->h_fov * M_PI / 360.f;
+    const float v_angle = s->v_fov * M_PI / 360.f;
 
     const float sin_phi   = sinf(h_angle);
     const float cos_phi   = cosf(h_angle);
     const float sin_theta = sinf(v_angle);
     const float cos_theta = cosf(v_angle);
 
-    range[0] =  cos_theta * sin_phi;
-    range[1] =  sin_theta;
-    range[2] = -cos_theta * cos_phi;
+    s->flat_range[0] =  cos_theta * sin_phi;
+    s->flat_range[1] =  sin_theta;
+    s->flat_range[2] = -cos_theta * cos_phi;
+
+    return 0;
 }
 
 static void flat_to_xyz(const PanoramaContext *s,
@@ -1096,49 +1282,13 @@ static inline void mirror(const float *modifier,
     vec[2] *= modifier[2];
 }
 
-static int get_direction(char c)
-{
-    switch (c) {
-    case 'r':
-        return RIGHT;
-    case 'l':
-        return LEFT;
-    case 'u':
-        return UP;
-    case 'd':
-        return DOWN;
-    case 'f':
-        return FRONT;
-    case 'b':
-        return BACK;
-    default:
-        return -1;
-    }
-}
-
-static int get_rotation(char c)
-{
-    switch (c) {
-        case '0':
-            return ROT_0;
-        case '1':
-            return ROT_90;
-        case '2':
-            return ROT_180;
-        case '3':
-            return ROT_270;
-        default:
-            return -1;
-    }
-}
-
-
 static int config_output(AVFilterLink *outlink)
 {
     AVFilterContext *ctx = outlink->src;
     AVFilterLink *inlink = ctx->inputs[0];
     PanoramaContext *s = ctx->priv;
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(inlink->format);
+    int err;
     int p, h, w;
     float hf, wf;
     float mirror_modifier[3];
@@ -1172,59 +1322,77 @@ static int config_output(AVFilterLink *outlink)
         av_assert0(0);
     }
 
-    if (s->out == FLAT) {
-        calculate_flat_range(s->h_fov, s->v_fov, s->flat_range);
+    switch (s->in) {
+    case EQUIRECTANGULAR:
+        in_transform = xyz_to_equirect;
+        err = 0;
+        wf = inlink->w;
+        hf = inlink->h;
+        break;
+    case CUBEMAP_3_2:
+        in_transform = xyz_to_cube3x2;
+        err = prepare_cube_in(s);
+        wf = inlink->w / 3.f * 4.f;
+        hf = inlink->h;
+        break;
+    case CUBEMAP_6_1:
+        in_transform = xyz_to_cube6x1;
+        err = prepare_cube_in(s);
+        wf = inlink->w / 3.f * 2.f;
+        hf = inlink->h * 2.f;
+        break;
+    case EQUIANGULAR:
+        in_transform = xyz_to_eac;
+        err = prepare_eac_in(s);
+        wf = inlink->w;
+        hf = inlink->h / 9.f * 8.f;
+        break;
+    }
+
+    if (err != 0) {
+        return err;
+    }
+
+    switch (s->out) {
+    case EQUIRECTANGULAR:
+        out_transform = equirect_to_xyz;
+        err = 0;
+        w = wf;
+        h = hf;
+        break;
+    case CUBEMAP_3_2:
+        out_transform = cube3x2_to_xyz;
+        err = prepare_cube_out(s);
+        w = wf / 4.f * 3.f;
+        h = hf;
+        break;
+    case CUBEMAP_6_1:
+        out_transform = cube6x1_to_xyz;
+        err = prepare_cube_out(s);
+        w = wf / 2.f * 3.f;
+        h = hf / 2.f;
+        break;
+    case EQUIANGULAR:
+        out_transform = eac_to_xyz;
+        err = prepare_eac_out(s);
+        w = wf;
+        h = hf / 8.f * 9.f;
+        break;
+    case FLAT:
+        out_transform = flat_to_xyz;
+        err = prepare_flat_out(s);
+        w = wf * s->flat_range[0] / s->flat_range[1] / 2.f;
+        h = hf;
+        break;
+    }
+
+    if (err != 0) {
+        return err;
     }
 
     if (s->width > 0 && s->height > 0) {
         w = s->width;
         h = s->height;
-    } else {
-        switch (s->in) {
-        case EQUIRECTANGULAR:
-            wf = inlink->w;
-            hf = inlink->h;
-            break;
-        case CUBEMAP_3_2:
-            wf = inlink->w / 3.f * 4.f;
-            hf = inlink->h;
-            break;
-        case CUBEMAP_6_1:
-            wf = inlink->w / 3.f * 2.f;
-            hf = inlink->h * 2.f;
-            break;
-        case EQUIANGULAR:
-            wf = inlink->w;
-            hf = inlink->h / 9.f * 8.f;
-            break;
-        default:
-            av_assert0(0);
-        }
-
-        switch (s->out) {
-        case EQUIRECTANGULAR:
-            w = wf;
-            h = hf;
-            break;
-        case CUBEMAP_3_2:
-            w = wf / 4.f * 3.f;
-            h = hf;
-            break;
-        case CUBEMAP_6_1:
-            w = wf / 2.f * 3.f;
-            h = hf / 2.f;
-            break;
-        case FLAT:
-            w = wf * s->flat_range[0] / s->flat_range[1] / 2.f;
-            h = hf;
-            break;
-        case EQUIANGULAR:
-            w = wf;
-            h = hf / 8.f * 9.f;
-            break;
-        default:
-            av_assert0(0);
-        }
     }
 
     s->planeheight[1] = s->planeheight[2] = FF_CEIL_RSHIFT(h, desc->log2_chroma_h);
@@ -1245,198 +1413,6 @@ static int config_output(AVFilterLink *outlink)
         s->remap[p] = av_calloc(s->planewidth[p] * s->planeheight[p], sizeof(XYRemap));
         if (!s->remap[p])
             return AVERROR(ENOMEM);
-    }
-
-    switch (s->in) {
-    case EQUIRECTANGULAR:
-        in_transform = xyz_to_equirect;
-        break;
-    case CUBEMAP_3_2:
-        in_transform = xyz_to_cube3x2;
-        break;
-    case CUBEMAP_6_1:
-        in_transform = xyz_to_cube6x1;
-        break;
-    case EQUIANGULAR:
-        in_transform = xyz_to_eac;
-        break;
-    }
-
-    switch (s->out) {
-    case EQUIRECTANGULAR:
-        out_transform = equirect_to_xyz;
-        break;
-    case CUBEMAP_3_2:
-        out_transform = cube3x2_to_xyz;
-        break;
-    case CUBEMAP_6_1:
-        out_transform = cube6x1_to_xyz;
-        break;
-    case EQUIANGULAR:
-        out_transform = eac_to_xyz;
-        break;
-    case FLAT:
-        out_transform = flat_to_xyz;
-        break;
-    }
-
-    if (strcmp(s->in_forder, "default") == 0) {
-        switch (s->in) {
-            case CUBEMAP_3_2:
-            case CUBEMAP_6_1:
-                s->in_cubemap_face_order[RIGHT] = TOP_LEFT;
-                s->in_cubemap_face_order[LEFT] = TOP_MIDDLE;
-                s->in_cubemap_face_order[UP] = TOP_RIGHT;
-                s->in_cubemap_face_order[DOWN] = BOTTOM_LEFT;
-                s->in_cubemap_face_order[FRONT] = BOTTOM_MIDDLE;
-                s->in_cubemap_face_order[BACK] = BOTTOM_RIGHT;
-                break;
-            case EQUIANGULAR:
-                s->in_cubemap_face_order[RIGHT] = TOP_RIGHT;
-                s->in_cubemap_face_order[LEFT] = TOP_LEFT;
-                s->in_cubemap_face_order[UP] = BOTTOM_RIGHT;
-                s->in_cubemap_face_order[DOWN] = BOTTOM_LEFT;
-                s->in_cubemap_face_order[FRONT] = TOP_MIDDLE;
-                s->in_cubemap_face_order[BACK] = BOTTOM_MIDDLE;
-                break;
-            default:
-                break;
-        }
-    } else {
-        for (int face = 0; face < NB_FACES; face++) {
-            const char c = s->in_forder[face];
-            int direction;
-            if (c == '\0') {
-                av_assert0(0);
-            }
-
-            direction = get_direction(c);
-            if (direction == -1) {
-                av_assert0(0);
-            }
-
-            s->in_cubemap_face_order[direction] = face;
-        }
-    }
-
-    if (strcmp(s->out_forder, "default") == 0) {
-        switch (s->out) {
-            case CUBEMAP_3_2:
-            case CUBEMAP_6_1:
-                s->out_cubemap_direction_order[TOP_LEFT] = RIGHT;
-                s->out_cubemap_direction_order[TOP_MIDDLE] = LEFT;
-                s->out_cubemap_direction_order[TOP_RIGHT] = UP;
-                s->out_cubemap_direction_order[BOTTOM_LEFT] = DOWN;
-                s->out_cubemap_direction_order[BOTTOM_MIDDLE] = FRONT;
-                s->out_cubemap_direction_order[BOTTOM_RIGHT] = BACK;
-                break;
-            case EQUIANGULAR:
-                s->out_cubemap_direction_order[TOP_LEFT] = LEFT;
-                s->out_cubemap_direction_order[TOP_MIDDLE] = FRONT;
-                s->out_cubemap_direction_order[TOP_RIGHT] = RIGHT;
-                s->out_cubemap_direction_order[BOTTOM_LEFT] = DOWN;
-                s->out_cubemap_direction_order[BOTTOM_MIDDLE] = BACK;
-                s->out_cubemap_direction_order[BOTTOM_RIGHT] = UP;
-                break;
-            default:
-                break;
-        }
-    } else {
-        for (int face = 0; face < NB_FACES; face++) {
-            const char c = s->out_forder[face];
-            int direction;
-
-            if (c == '\0') {
-                av_assert0(0);
-            }
-
-            direction = get_direction(c);
-            if (direction == -1) {
-                av_assert0(0);
-            }
-
-            s->out_cubemap_direction_order[face] = direction;
-        }
-    }
-
-    if (strcmp(s->in_frot, "default") == 0) {
-        switch (s->in) {
-            case CUBEMAP_3_2:
-            case CUBEMAP_6_1:
-                s->in_cubemap_face_rotation[TOP_LEFT] = ROT_0;
-                s->in_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
-                s->in_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
-                s->in_cubemap_face_rotation[BOTTOM_LEFT] = ROT_0;
-                s->in_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_0;
-                s->in_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_0;
-                break;
-            case EQUIANGULAR:
-                s->in_cubemap_face_rotation[TOP_LEFT] = ROT_0;
-                s->in_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
-                s->in_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
-                s->in_cubemap_face_rotation[BOTTOM_LEFT] = ROT_270;
-                s->in_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_90;
-                s->in_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_270;
-                break;
-            default:
-                break;
-        }
-    } else {
-        for (int face = 0; face < NB_FACES; face++) {
-            const char c = s->in_frot[face];
-            int rotation;
-
-            if (c == '\0') {
-                av_assert0(0);
-            }
-
-            rotation = get_rotation(c);
-            if (rotation == -1) {
-                av_assert0(0);
-            }
-
-            s->in_cubemap_face_rotation[face] = rotation;
-        }
-    }
-
-    if (strcmp(s->out_frot, "default") == 0) {
-        switch (s->out) {
-            case CUBEMAP_3_2:
-            case CUBEMAP_6_1:
-                s->out_cubemap_face_rotation[TOP_LEFT] = ROT_0;
-                s->out_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
-                s->out_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
-                s->out_cubemap_face_rotation[BOTTOM_LEFT] = ROT_0;
-                s->out_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_0;
-                s->out_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_0;
-                break;
-            case EQUIANGULAR:
-                s->out_cubemap_face_rotation[TOP_LEFT] = ROT_0;
-                s->out_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
-                s->out_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
-                s->out_cubemap_face_rotation[BOTTOM_LEFT] = ROT_270;
-                s->out_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_90;
-                s->out_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_270;
-                break;
-            default:
-                break;
-        }
-    } else {
-        for (int face = 0; face < NB_FACES; face++) {
-            const char c = s->out_frot[face];
-            int rotation;
-
-            if (c == '\0') {
-                av_assert0(0);
-            }
-
-            rotation = get_rotation(c);
-            if (rotation == -1) {
-                av_assert0(0);
-            }
-
-            s->out_cubemap_face_rotation[face] = rotation;
-        }
     }
 
     calculate_rotation_matrix(s->yaw, s->pitch, s->roll, rot_mat);
