@@ -203,9 +203,15 @@ static int nearest_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs
     return 0;
 }
 
-static void nearest_kernel(float mu, float nu, float kernel[4][4])
+static void nearest_kernel(float mu, float nu, XYRemap *r)
 {
-    return;
+    // Store coordinates of nearest pixel in [1][1]
+    // to speed up nearest_slice
+    const int i = roundf(nu) + 1;
+    const int j = roundf(mu) + 1;
+
+    r->u[1][1] = r->u[i][j];
+    r->v[1][1] = r->v[i][j];
 }
 
 static int bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
@@ -249,12 +255,12 @@ static int bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_job
     return 0;
 }
 
-static void bilinear_kernel(float mu, float nu, float kernel[4][4])
+static void bilinear_kernel(float mu, float nu, XYRemap *r)
 {
-    kernel[1][1] = (1.f - mu) * (1.f - nu);
-    kernel[1][2] =        mu  * (1.f - nu);
-    kernel[2][1] = (1.f - mu) *        nu;
-    kernel[2][2] =        mu  *        nu;
+    r->ker[1][1] = (1.f - mu) * (1.f - nu);
+    r->ker[1][2] =        mu  * (1.f - nu);
+    r->ker[2][1] = (1.f - mu) *        nu;
+    r->ker[2][2] =        mu  *        nu;
 }
 
 static int bicubic_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
@@ -309,7 +315,7 @@ static inline void calculate_bicubic_coeffs(float t, float *coeffs)
     coeffs[3] =     - t / 6.f            + ttt / 6.f;
 }
 
-static void bicubic_kernel(float mu, float nu, float kernel[4][4])
+static void bicubic_kernel(float mu, float nu, XYRemap *r)
 {
     int i, j;
     float mu_coeffs[4];
@@ -320,7 +326,7 @@ static void bicubic_kernel(float mu, float nu, float kernel[4][4])
 
     for (i = 0; i < 4; i++) {
         for (j = 0; j < 4; j++) {
-            kernel[i][j] = mu_coeffs[j] * nu_coeffs[i];
+            r->ker[i][j] = mu_coeffs[j] * nu_coeffs[i];
         }
     }
 }
@@ -387,7 +393,7 @@ static inline void calculate_lanczos_coeffs(float t, float *coeffs)
     }
 }
 
-static void lanczos_kernel(float mu, float nu, float kernel[4][4])
+static void lanczos_kernel(float mu, float nu, XYRemap *r)
 {
     int i, j;
     float mu_coeffs[4];
@@ -398,7 +404,7 @@ static void lanczos_kernel(float mu, float nu, float kernel[4][4])
 
     for (i = 0; i < 4; i++) {
         for (j = 0; j < 4; j++) {
-            kernel[i][j] = mu_coeffs[j] * nu_coeffs[i];
+            r->ker[i][j] = mu_coeffs[j] * nu_coeffs[i];
         }
     }
 }
@@ -1308,7 +1314,7 @@ static int config_output(AVFilterLink *outlink)
     void (*out_transform)(const PanoramaContext *s,
                           int i, int j, int width, int height,
                           float *vec);
-    void (*calculate_kernel)(float mu, float nu, float kernel[4][4]);
+    void (*calculate_kernel)(float mu, float nu, XYRemap *r);
     float rot_mat[3][3];
 
     switch (s->interp) {
@@ -1445,7 +1451,7 @@ static int config_output(AVFilterLink *outlink)
                 rotate(rot_mat, vec);
                 mirror(mirror_modifier, vec);
                 in_transform(s, vec, in_width, in_height, r->u, r->v, &mu, &nu);
-                calculate_kernel(mu, nu, r->ker);
+                calculate_kernel(mu, nu, r);
             }
         }
     }
