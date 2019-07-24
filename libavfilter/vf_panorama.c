@@ -634,7 +634,7 @@ static void cube_to_xyz(const PanoramaContext *s,
                         float uf, float vf, int face,
                         float *vec)
 {
-    int direction = s->out_cubemap_direction_order[face];
+    const int direction = s->out_cubemap_direction_order[face];
     float norm;
     float l_x, l_y, l_z;
 
@@ -683,8 +683,8 @@ static void xyz_to_cube(const PanoramaContext *s,
                         const float *vec, float res,
                         float *uf, float *vf, int *direction)
 {
-    float phi   = atan2f(vec[0], -vec[2]);
-    float theta = asinf(-vec[1]);
+    const float phi   = atan2f(vec[0], -vec[2]);
+    const float theta = asinf(-vec[1]);
     float phi_norm, theta_threshold;
     int face;
 
@@ -702,7 +702,7 @@ static void xyz_to_cube(const PanoramaContext *s,
         phi_norm = phi + ((phi > 0.f) ? -M_PI : M_PI);
     }
 
-    theta_threshold = atan2f(1.f, 1.f / cosf(phi_norm));
+    theta_threshold = atanf(cosf(phi_norm));
     if (theta > theta_threshold) {
         *direction = DOWN;
     } else if (theta < -theta_threshold) {
@@ -917,28 +917,32 @@ static void cube3x2_to_xyz(const PanoramaContext *s,
                            int i, int j, int width, int height,
                            float *vec)
 {
-    float ew = width  / 3.f;
-    float eh = height / 2.f;
-    int u_face = floorf(i / ew);
-    int v_face = floorf(j / eh);
-    int ushift = ceilf(ew * u_face);
-    int vshift = ceilf(eh * v_face);
-    int ewi = ceilf(ew * (u_face + 1)) - ushift;
-    int ehi = ceilf(eh * (v_face + 1)) - vshift;
-    float uf = 2.f * (i - ushift) / ewi - 1.f;
-    float vf = 2.f * (j - vshift) / ehi - 1.f;
+    const float ew = width  / 3.f;
+    const float eh = height / 2.f;
 
-    cube_to_xyz(s, uf, vf, u_face + 3 * v_face, vec);
+    const int u_face = floorf(i / ew);
+    const int v_face = floorf(j / eh);
+    const int face = u_face + 3 * v_face;
+
+    const int ushift = ceilf(ew * u_face);
+    const int vshift = ceilf(eh * v_face);
+    const int ewi = ceilf(ew * (u_face + 1)) - ushift;
+    const int ehi = ceilf(eh * (v_face + 1)) - vshift;
+
+    const float uf = 2.f * (i - ushift) / ewi - 1.f;
+    const float vf = 2.f * (j - vshift) / ehi - 1.f;
+
+    cube_to_xyz(s, uf, vf, face, vec);
 }
 
 static void xyz_to_cube3x2(const PanoramaContext *s,
                            const float *vec, int width, int height,
                            uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu)
 {
-    float res = M_PI_4 / (width / 3) / 10.f;
+    const float res = M_PI_4 / (width / 3) / 10.f;
+    const float ew = width  / 3.f;
+    const float eh = height / 2.f;
     float uf, vf;
-    float ew = width  / 3.f;
-    float eh = height / 2.f;
     int ui, vi;
     int ewi, ehi;
     int i, j;
@@ -988,13 +992,16 @@ static void cube6x1_to_xyz(const PanoramaContext *s,
                            int i, int j, int width, int height,
                            float *vec)
 {
-    float ew = width / 6.f;
-    float eh = height;
-    int face = floorf(i / ew);
-    int u_shift = ceilf(ew * face);
-    int ewi = ceilf(ew * (face + 1)) - u_shift;
-    float uf = 2.f * (i - u_shift) / ewi - 1.f;
-    float vf = 2.f *  j            / eh  - 1.f;
+    const float ew = width / 6.f;
+    const float eh = height;
+
+    const int face = floorf(i / ew);
+
+    const int u_shift = ceilf(ew * face);
+    const int ewi = ceilf(ew * (face + 1)) - u_shift;
+
+    const float uf = 2.f * (i - u_shift) / ewi - 1.f;
+    const float vf = 2.f *  j            / eh  - 1.f;
 
     cube_to_xyz(s, uf, vf, face, vec);
 }
@@ -1003,10 +1010,10 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
                            const float *vec, int width, int height,
                            uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu)
 {
-    float res = M_PI_4 / (width / 6) / 10.f;
+    const float res = M_PI_4 / (width / 6) / 10.f;
+    const float ew = width / 6.f;
+    const float eh = height;
     float uf, vf;
-    float ew = width / 6.f;
-    float eh = height;
     int ui, vi;
     int ewi;
     int i, j;
@@ -1048,8 +1055,8 @@ static void equirect_to_xyz(const PanoramaContext *s,
                             int i, int j, int width, int height,
                             float *vec)
 {
-    float phi   = ((2.f * i) / width  - 1.f) * M_PI;
-    float theta = ((2.f * j) / height - 1.f) * M_PI_2;
+    const float phi   = ((2.f * i) / width  - 1.f) * M_PI;
+    const float theta = ((2.f * j) / height - 1.f) * M_PI_2;
 
     const float sin_phi   = sinf(phi);
     const float cos_phi   = cosf(phi);
@@ -1065,11 +1072,11 @@ static void xyz_to_equirect(const PanoramaContext *s,
                             const float *vec, int width, int height,
                             uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu)
 {
+    const float phi   = atan2f(vec[0], -vec[2]);
+    const float theta = asinf(-vec[1]);
     float uf, vf;
     int ui, vi;
     int i, j;
-    float phi   = atan2f(vec[0], -vec[2]);
-    float theta = asinf(-vec[1]);
 
     uf = (phi   / M_PI   + 1.f) * width  / 2.f;
     vf = (theta / M_PI_2 + 1.f) * height / 2.f;
@@ -1129,19 +1136,24 @@ static void eac_to_xyz(const PanoramaContext *s,
                        int i, int j, int width, int height,
                        float *vec)
 {
-    float ew = width  / 3.f;
-    float eh = height / 2.f;
-    int u_face = floorf(i / ew);
-    int v_face = floorf(j / eh);
-    int face = u_face + 3 * v_face;
-    int u_shift = ceilf(ew * u_face);
-    int v_shift = ceilf(eh * v_face);
-    int ewi = ceilf(ew * (u_face + 1)) - u_shift;
-    int ehi = ceilf(eh * (v_face + 1)) - v_shift;
+    const float ew = width  / 3.f;
+    const float eh = height / 2.f;
+
+    const int u_face = floorf(i / ew);
+    const int v_face = floorf(j / eh);
+    const int face = u_face + 3 * v_face;
+
+    const int u_shift = ceilf(ew * u_face);
+    const int v_shift = ceilf(eh * v_face);
+    const int ewi = ceilf(ew * (u_face + 1)) - u_shift;
+    const int ehi = ceilf(eh * (v_face + 1)) - v_shift;
+
+    const float upad = 3.f / ewi;
+    const float vpad = 3.f / ehi;
+
     float uf = tanf(M_PI_2 * ((0.5f + i - u_shift) / ewi - 0.5f));
     float vf = tanf(M_PI_2 * ((0.5f + j - v_shift) / ehi - 0.5f));
-    float upad = 3.f / ewi;
-    float vpad = 3.f / ehi;
+
 
     // Process padding
     switch (face) {
@@ -1163,18 +1175,18 @@ static void xyz_to_eac(const PanoramaContext *s,
                        const float *vec, int width, int height,
                        uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu)
 {
-    float res = M_PI_4 / (width / 3) / 10.f;
+    const float res = M_PI_4 / (width / 3) / 10.f;
+    const float ew = width  / 3.f;
+    const float eh = height / 2.f;
+    const float upad = 3.f / ew;
+    const float vpad = 3.f / eh;
     float uf, vf;
-    float ew = width  / 3.f;
-    float eh = height / 2.f;
     int ui, vi;
+    int ewi, ehi;
     int i, j;
-    int face, direction;
+    int direction, face;
     int u_face, v_face;
     int u_shift, v_shift;
-    int ewi, ehi;
-    float upad = 3.f / ew;
-    float vpad = 3.f / eh;
 
     xyz_to_cube(s, vec, res, &uf, &vf, &direction);
 
@@ -1435,12 +1447,12 @@ static int config_output(AVFilterLink *outlink)
     set_mirror_modifier(s->hflip, s->vflip, s->dflip, mirror_modifier);
 
     for (p = 0; p < s->nb_planes; p++) {
+        const int width = s->planewidth[p];
+        const int height = s->planeheight[p];
+        const int in_width = s->inplanewidth[p];
+        const int in_height = s->inplaneheight[p];
         float mu, nu;
         float vec[3];
-        int width = s->planewidth[p];
-        int height = s->planeheight[p];
-        int in_width = s->inplanewidth[p];
-        int in_height = s->inplaneheight[p];
         int i, j;
 
         for (i = 0; i < width; i++) {
