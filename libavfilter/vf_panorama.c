@@ -1343,6 +1343,8 @@ static int config_output(AVFilterLink *outlink)
         s->panorama_slice = lanczos_slice;
         calculate_kernel = lanczos_kernel;
         break;
+    default:
+        return AVERROR(EINVAL);
     }
 
     switch (s->in) {
@@ -1370,6 +1372,8 @@ static int config_output(AVFilterLink *outlink)
         wf = inlink->w;
         hf = inlink->h / 9.f * 8.f;
         break;
+    default:
+        return AVERROR(EINVAL);
     }
 
     if (err != 0) {
@@ -1407,6 +1411,8 @@ static int config_output(AVFilterLink *outlink)
         w = wf * s->flat_range[0] / s->flat_range[1] / 2.f;
         h = hf;
         break;
+    default:
+        return AVERROR(EINVAL);
     }
 
     if (err != 0) {
