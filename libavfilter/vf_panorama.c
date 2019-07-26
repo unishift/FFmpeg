@@ -202,12 +202,12 @@ static int nearest_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs
     return 0;
 }
 
-static void nearest_kernel(float mu, float nu, XYRemap *r)
+static void nearest_kernel(float du, float dv, XYRemap *r)
 {
     // Store coordinates of nearest pixel in [1][1]
     // to speed up nearest_slice
-    const int i = roundf(nu) + 1;
-    const int j = roundf(mu) + 1;
+    const int i = roundf(dv) + 1;
+    const int j = roundf(du) + 1;
 
     r->u[1][1] = r->u[i][j];
     r->v[1][1] = r->v[i][j];
@@ -254,12 +254,12 @@ static int bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_job
     return 0;
 }
 
-static void bilinear_kernel(float mu, float nu, XYRemap *r)
+static void bilinear_kernel(float du, float dv, XYRemap *r)
 {
-    r->ker[1][1] = (1.f - mu) * (1.f - nu);
-    r->ker[1][2] =        mu  * (1.f - nu);
-    r->ker[2][1] = (1.f - mu) *        nu;
-    r->ker[2][2] =        mu  *        nu;
+    r->ker[1][1] = (1.f - du) * (1.f - dv);
+    r->ker[1][2] =        du  * (1.f - dv);
+    r->ker[2][1] = (1.f - du) *        dv;
+    r->ker[2][2] =        du  *        dv;
 }
 
 static int bicubic_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
@@ -314,18 +314,18 @@ static inline void calculate_bicubic_coeffs(float t, float *coeffs)
     coeffs[3] =     - t / 6.f            + ttt / 6.f;
 }
 
-static void bicubic_kernel(float mu, float nu, XYRemap *r)
+static void bicubic_kernel(float du, float dv, XYRemap *r)
 {
     int i, j;
-    float mu_coeffs[4];
-    float nu_coeffs[4];
+    float du_coeffs[4];
+    float dv_coeffs[4];
 
-    calculate_bicubic_coeffs(mu, mu_coeffs);
-    calculate_bicubic_coeffs(nu, nu_coeffs);
+    calculate_bicubic_coeffs(du, du_coeffs);
+    calculate_bicubic_coeffs(dv, dv_coeffs);
 
     for (i = 0; i < 4; i++) {
         for (j = 0; j < 4; j++) {
-            r->ker[i][j] = mu_coeffs[j] * nu_coeffs[i];
+            r->ker[i][j] = du_coeffs[j] * dv_coeffs[i];
         }
     }
 }
@@ -392,18 +392,18 @@ static inline void calculate_lanczos_coeffs(float t, float *coeffs)
     }
 }
 
-static void lanczos_kernel(float mu, float nu, XYRemap *r)
+static void lanczos_kernel(float du, float dv, XYRemap *r)
 {
     int i, j;
-    float mu_coeffs[4];
-    float nu_coeffs[4];
+    float du_coeffs[4];
+    float dv_coeffs[4];
 
-    calculate_lanczos_coeffs(mu, mu_coeffs);
-    calculate_lanczos_coeffs(nu, nu_coeffs);
+    calculate_lanczos_coeffs(du, du_coeffs);
+    calculate_lanczos_coeffs(dv, dv_coeffs);
 
     for (i = 0; i < 4; i++) {
         for (j = 0; j < 4; j++) {
-            r->ker[i][j] = mu_coeffs[j] * nu_coeffs[i];
+            r->ker[i][j] = du_coeffs[j] * dv_coeffs[i];
         }
     }
 }
@@ -934,7 +934,7 @@ static void cube3x2_to_xyz(const PanoramaContext *s,
 
 static void xyz_to_cube3x2(const PanoramaContext *s,
                            const float *vec, int width, int height,
-                           uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu)
+                           uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
 {
     const float res = M_PI_4 / (width / 3) / 10.f;
     const float ew = width  / 3.f;
@@ -960,8 +960,8 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
     ui = floorf(uf);
     vi = floorf(vf);
 
-    *mu = uf - ui;
-    *nu = vf - vi;
+    *du = uf - ui;
+    *dv = vf - vi;
 
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
@@ -1005,7 +1005,7 @@ static void cube6x1_to_xyz(const PanoramaContext *s,
 
 static void xyz_to_cube6x1(const PanoramaContext *s,
                            const float *vec, int width, int height,
-                           uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu)
+                           uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
 {
     const float res = M_PI_4 / (width / 6) / 10.f;
     const float ew = width / 6.f;
@@ -1027,8 +1027,8 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
     ui = floorf(uf);
     vi = floorf(vf);
 
-    *mu = uf - ui;
-    *nu = vf - vi;
+    *du = uf - ui;
+    *dv = vf - vi;
 
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
@@ -1067,7 +1067,7 @@ static void equirect_to_xyz(const PanoramaContext *s,
 
 static void xyz_to_equirect(const PanoramaContext *s,
                             const float *vec, int width, int height,
-                            uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu)
+                            uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
 {
     const float phi   = atan2f(vec[0], -vec[2]);
     const float theta = asinf(-vec[1]);
@@ -1080,8 +1080,8 @@ static void xyz_to_equirect(const PanoramaContext *s,
     ui = floorf(uf);
     vi = floorf(vf);
 
-    *mu = uf - ui;
-    *nu = vf - vi;
+    *du = uf - ui;
+    *dv = vf - vi;
 
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
@@ -1170,7 +1170,7 @@ static void eac_to_xyz(const PanoramaContext *s,
 
 static void xyz_to_eac(const PanoramaContext *s,
                        const float *vec, int width, int height,
-                       uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu)
+                       uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
 {
     const float res = M_PI_4 / (width / 3) / 10.f;
     const float ew = width  / 3.f;
@@ -1213,8 +1213,8 @@ static void xyz_to_eac(const PanoramaContext *s,
     ui = floorf(uf);
     vi = floorf(vf);
 
-    *mu = uf - ui;
-    *nu = vf - vi;
+    *du = uf - ui;
+    *dv = vf - vi;
 
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
@@ -1319,11 +1319,11 @@ static int config_output(AVFilterLink *outlink)
     float mirror_modifier[3];
     void (*in_transform)(const PanoramaContext *s,
                          const float *vec, int width, int height,
-                         uint16_t us[4][4], uint16_t vs[4][4], float *mu, float *nu);
+                         uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv);
     void (*out_transform)(const PanoramaContext *s,
                           int i, int j, int width, int height,
                           float *vec);
-    void (*calculate_kernel)(float mu, float nu, XYRemap *r);
+    void (*calculate_kernel)(float du, float dv, XYRemap *r);
     float rot_mat[3][3];
 
     switch (s->interp) {
@@ -1446,7 +1446,7 @@ static int config_output(AVFilterLink *outlink)
         const int height = s->planeheight[p];
         const int in_width = s->inplanewidth[p];
         const int in_height = s->inplaneheight[p];
-        float mu, nu;
+        float du, dv;
         float vec[3];
         int i, j;
 
@@ -1457,8 +1457,8 @@ static int config_output(AVFilterLink *outlink)
                 out_transform(s, i, j, width, height, vec);
                 rotate(rot_mat, vec);
                 mirror(mirror_modifier, vec);
-                in_transform(s, vec, in_width, in_height, r->u, r->v, &mu, &nu);
-                calculate_kernel(mu, nu, r);
+                in_transform(s, vec, in_width, in_height, r->u, r->v, &du, &dv);
+                calculate_kernel(du, dv, r);
             }
         }
     }
