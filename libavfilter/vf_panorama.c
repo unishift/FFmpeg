@@ -16,7 +16,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "libavutil/avassert.h"
 #include "libavutil/eval.h"
 #include "libavutil/imgutils.h"
 #include "libavutil/pixdesc.h"
@@ -540,13 +539,11 @@ static int prepare_cube_out(PanoramaContext *s)
             int direction;
 
             if (c == '\0') {
-                av_assert0(0);
                 return AVERROR(EINVAL);
             }
 
             direction = get_direction(c);
             if (direction == -1) {
-                av_assert0(0);
                 return AVERROR(EINVAL);
             }
 
@@ -1346,8 +1343,6 @@ static int config_output(AVFilterLink *outlink)
         s->panorama_slice = lanczos_slice;
         calculate_kernel = lanczos_kernel;
         break;
-    default:
-        av_assert0(0);
     }
 
     switch (s->in) {
