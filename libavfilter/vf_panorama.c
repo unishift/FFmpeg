@@ -295,7 +295,7 @@ static int bicubic_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs
                     }
                 }
 
-                *d++ = av_clip(tmp, 0, 255);
+                *d++ = av_clip(roundf(tmp), 0, 255);
             }
         }
     }
@@ -363,7 +363,7 @@ static int lanczos_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs
                     }
                 }
 
-                *d++ = av_clip(tmp, 0, 255);
+                *d++ = av_clip(roundf(tmp), 0, 255);
             }
         }
     }
