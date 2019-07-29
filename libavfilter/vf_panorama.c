@@ -16,6 +16,21 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+/**
+ * @file
+ * Panorama conversion filter.
+ * Principle of operation:
+ *
+ * (for each pixel in output frame)\n
+ * 1) Calculate OpenGL-like coordinates (x, y, z) for pixel position (i, j)\n
+ * 2) Apply 360 operations (rotation, mirror) to (x, y, z)\n
+ * 3) Calculate pixel position (u, v) in input frame\n
+ * 4) Calculate interpolation window and weight for each pixel
+ *
+ * (for each frame)\n
+ * 5) Remap input frame to output frame using precalculated data\n
+ */
+
 #include "libavutil/eval.h"
 #include "libavutil/imgutils.h"
 #include "libavutil/pixdesc.h"
@@ -53,12 +68,12 @@ enum Faces {
 };
 
 enum Direction {
-    RIGHT,
-    LEFT,
-    UP,
-    DOWN,
-    FRONT,
-    BACK,
+    RIGHT,  ///< Axis +X
+    LEFT,   ///< Axis -X
+    UP,     ///< Axis +Y
+    DOWN,   ///< Axis -Y
+    FRONT,  ///< Axis -Z
+    BACK,   ///< Axis +Z
     NB_DIRECTIONS,
 };
 
@@ -168,6 +183,16 @@ static int query_formats(AVFilterContext *ctx)
     return ff_set_common_formats(ctx, fmts_list);
 }
 
+/**
+ * Slice remapping using nearest neighbour interpolation.
+ *
+ * @param ctx filter context
+ * @param arg thread data
+ * @param jobnr current job
+ * @param nb_jobs jobs total
+ *
+ * @return error code
+ */
 static int nearest_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
 {
     ThreadData *td = (ThreadData*)arg;
@@ -202,10 +227,15 @@ static int nearest_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs
     return 0;
 }
 
+/**
+ * Save nearest pixel coordinates for remapping.
+ *
+ * @param du horizontal relative coordinate
+ * @param dv vertical relative coordinate
+ * @param r remap data
+ */
 static void nearest_kernel(float du, float dv, XYRemap *r)
 {
-    // Store coordinates of nearest pixel in [1][1]
-    // to speed up nearest_slice
     const int i = roundf(dv) + 1;
     const int j = roundf(du) + 1;
 
@@ -213,6 +243,16 @@ static void nearest_kernel(float du, float dv, XYRemap *r)
     r->v[1][1] = r->v[i][j];
 }
 
+/**
+ * Slice remapping using bilinear interpolation.
+ *
+ * @param ctx filter context
+ * @param arg thread data
+ * @param jobnr current job
+ * @param nb_jobs jobs total
+ *
+ * @return error code
+ */
 static int bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
 {
     ThreadData *td = (ThreadData*)arg;
@@ -254,6 +294,13 @@ static int bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_job
     return 0;
 }
 
+/**
+ * Calculate kernel for bilinear interpolation.
+ *
+ * @param du horizontal relative coordinate
+ * @param dv vertical relative coordinate
+ * @param r remap data
+ */
 static void bilinear_kernel(float du, float dv, XYRemap *r)
 {
     r->ker[1][1] = (1.f - du) * (1.f - dv);
@@ -262,6 +309,16 @@ static void bilinear_kernel(float du, float dv, XYRemap *r)
     r->ker[2][2] =        du  *        dv;
 }
 
+/**
+ * Slice remapping using bicubic interpolation.
+ *
+ * @param ctx filter context
+ * @param arg thread data
+ * @param jobnr current job
+ * @param nb_jobs jobs total
+ *
+ * @return error code
+ */
 static int bicubic_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
 {
     ThreadData *td = (ThreadData*)arg;
@@ -303,6 +360,12 @@ static int bicubic_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs
     return 0;
 }
 
+/**
+ * Calculate 1-dimensional cubic coefficients.
+ *
+ * @param t relative coordinate
+ * @param coeffs coefficients
+ */
 static inline void calculate_bicubic_coeffs(float t, float *coeffs)
 {
     const float tt  = t * t;
@@ -314,6 +377,13 @@ static inline void calculate_bicubic_coeffs(float t, float *coeffs)
     coeffs[3] =     - t / 6.f            + ttt / 6.f;
 }
 
+/**
+ * Calculate kernel for bicubic interpolation.
+ *
+ * @param du horizontal relative coordinate
+ * @param dv vertical relative coordinate
+ * @param r remap data
+ */
 static void bicubic_kernel(float du, float dv, XYRemap *r)
 {
     int i, j;
@@ -330,6 +400,16 @@ static void bicubic_kernel(float du, float dv, XYRemap *r)
     }
 }
 
+/**
+ * Slice remapping using lanczos interpolation.
+ *
+ * @param ctx filter context
+ * @param arg thread data
+ * @param jobnr current job
+ * @param nb_jobs jobs total
+ *
+ * @return error code
+ */
 static int lanczos_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
 {
     ThreadData *td = (ThreadData*)arg;
@@ -372,6 +452,12 @@ static int lanczos_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs
 
 }
 
+/**
+ * Calculate 1-dimensional lanczos coefficients.
+ *
+ * @param t relative coordinate
+ * @param coeffs coefficients
+ */
 static inline void calculate_lanczos_coeffs(float t, float *coeffs)
 {
     int i;
@@ -392,6 +478,13 @@ static inline void calculate_lanczos_coeffs(float t, float *coeffs)
     }
 }
 
+/**
+ * Calculate kernel for lanczos interpolation.
+ *
+ * @param du horizontal relative coordinate
+ * @param dv vertical relative coordinate
+ * @param r remap data
+ */
 static void lanczos_kernel(float du, float dv, XYRemap *r)
 {
     int i, j;
@@ -424,6 +517,14 @@ static inline int in_range(float rd, float small, float large, float res)
           &&  smaller(rd, large, res);
 }
 
+/**
+ * Modulo operation with only positive remainders.
+ *
+ * @param a dividend
+ * @param b divisor
+ *
+ * @return positive remainder of (a / b)
+ */
 static inline int mod(int a, int b)
 {
     const int res = a % b;
@@ -434,6 +535,10 @@ static inline int mod(int a, int b)
     }
 }
 
+/**
+ * Convert char to corresponding direction.
+ * Used for cubemap options.
+ */
 static int get_direction(char c)
 {
     switch (c) {
@@ -454,6 +559,10 @@ static int get_direction(char c)
     }
 }
 
+/**
+ * Convert char to corresponding rotation angle.
+ * Used for cubemap options.
+ */
 static int get_rotation(char c)
 {
     switch (c) {
@@ -470,6 +579,13 @@ static int get_rotation(char c)
     }
 }
 
+/**
+ * Prepare data for processing cubemap input format.
+ *
+ * @param s filter context
+ *
+ * @return error code
+ */
 static int prepare_cube_in(PanoramaContext *s)
 {
     if (strcmp(s->in_forder, "default") == 0) {
@@ -524,6 +640,13 @@ static int prepare_cube_in(PanoramaContext *s)
     return 0;
 }
 
+/**
+ * Prepare data for processing cubemap output format.
+ *
+ * @param s filter context
+ *
+ * @return error code
+ */
 static int prepare_cube_out(PanoramaContext *s)
 {
     if (strcmp(s->out_forder, "default") == 0) {
@@ -627,6 +750,16 @@ static inline void rotate_cube_face_inverse(float *uf, float *vf, int rotation)
     }
 }
 
+/**
+ * Calculate 3D coordinates on sphere for corresponding cubemap position.
+ * Common operation for every cubemap.
+ *
+ * @param s filter context
+ * @param uf horizontal cubemap coordinate [0, 1)
+ * @param vf vertical cubemap coordinate [0, 1)
+ * @param face face of cubemap
+ * @param vec coordinates on sphere
+ */
 static void cube_to_xyz(const PanoramaContext *s,
                         float uf, float vf, int face,
                         float *vec)
@@ -676,6 +809,17 @@ static void cube_to_xyz(const PanoramaContext *s,
     vec[2] = l_z / norm;
 }
 
+/**
+ * Calculate cubemap position for corresponding 3D coordinates on sphere.
+ * Common operation for every cubemap.
+ *
+ * @param s filter context
+ * @param vec coordinated on sphere
+ * @param res resolution
+ * @param uf horizontal cubemap coordinate [0, 1)
+ * @param vf vertical cubemap coordinate [0, 1)
+ * @param direction direction of view
+ */
 static void xyz_to_cube(const PanoramaContext *s,
                         const float *vec, float res,
                         float *uf, float *vf, int *direction)
@@ -737,26 +881,39 @@ static void xyz_to_cube(const PanoramaContext *s,
     rotate_cube_face(uf, vf, s->in_cubemap_face_rotation[face]);
 }
 
-/*
- *  Default cubemap
+/**
+ * Find position on another cube face in case of overflow/underflow.
+ * Used for calculation of interpolation window.
  *
- *           width
- *         <------->
- *         +-------+
- *         |       |                              U
- *         | up    |                   h       ------->
- * +-------+-------+-------+-------+ ^ e      |
- * |       |       |       |       | | i    V |
- * | left  | front | right | back  | | g      |
- * +-------+-------+-------+-------+ v h      v
- *         |       |                   t
- *         | down  |
- *         +-------+
+ * @param s filter context
+ * @param uf horizontal cubemap coordinate
+ * @param vf vertical cubemap coordinate
+ * @param direction direction of view
+ * @param new_uf new horizontal cubemap coordinate
+ * @param new_vf new vertical cubemap coordinate
+ * @param face face position on cubemap
  */
 static void process_cube_coordinates(const PanoramaContext *s,
                                 float uf, float vf, int direction,
                                 float *new_uf, float *new_vf, int *face)
 {
+    /*
+     *  Cubemap orientation
+     *
+     *           width
+     *         <------->
+     *         +-------+
+     *         |       |                              U
+     *         | up    |                   h       ------->
+     * +-------+-------+-------+-------+ ^ e      |
+     * |       |       |       |       | | i    V |
+     * | left  | front | right | back  | | g      |
+     * +-------+-------+-------+-------+ v h      v
+     *         |       |                   t
+     *         | down  |
+     *         +-------+
+     */
+
     *face = s->in_cubemap_face_order[direction];
     rotate_cube_face_inverse(&uf, &vf, s->in_cubemap_face_rotation[*face]);
 
@@ -910,6 +1067,16 @@ static void process_cube_coordinates(const PanoramaContext *s,
     rotate_cube_face(new_uf, new_vf, s->in_cubemap_face_rotation[*face]);
 }
 
+/**
+ * Calculate 3D coordinates on sphere for corresponding frame position in cubemap3x2 format.
+ *
+ * @param s filter context
+ * @param i horizontal position on frame [0, height)
+ * @param j vertical position on frame [0, width)
+ * @param width frame width
+ * @param height frame height
+ * @param vec coordinates on sphere
+ */
 static void cube3x2_to_xyz(const PanoramaContext *s,
                            int i, int j, int width, int height,
                            float *vec)
@@ -932,6 +1099,18 @@ static void cube3x2_to_xyz(const PanoramaContext *s,
     cube_to_xyz(s, uf, vf, face, vec);
 }
 
+/**
+ * Calculate frame position in cubemap3x2 format for corresponding 3D coordinates on sphere.
+ *
+ * @param s filter context
+ * @param vec coordinates on sphere
+ * @param width frame width
+ * @param height frame height
+ * @param us horizontal coordinates for interpolation window
+ * @param vs vertical coordinates for interpolation window
+ * @param du horizontal relative coordinate
+ * @param dv vertical relative coordinate
+ */
 static void xyz_to_cube3x2(const PanoramaContext *s,
                            const float *vec, int width, int height,
                            uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
@@ -985,6 +1164,16 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
     }
 }
 
+/**
+ * Calculate 3D coordinates on sphere for corresponding frame position in cubemap6x1 format.
+ *
+ * @param s filter context
+ * @param i horizontal position on frame [0, height)
+ * @param j vertical position on frame [0, width)
+ * @param width frame width
+ * @param height frame height
+ * @param vec coordinates on sphere
+ */
 static void cube6x1_to_xyz(const PanoramaContext *s,
                            int i, int j, int width, int height,
                            float *vec)
@@ -1003,6 +1192,18 @@ static void cube6x1_to_xyz(const PanoramaContext *s,
     cube_to_xyz(s, uf, vf, face, vec);
 }
 
+/**
+ * Calculate frame position in cubemap6x1 format for corresponding 3D coordinates on sphere.
+ *
+ * @param s filter context
+ * @param vec coordinates on sphere
+ * @param width frame width
+ * @param height frame height
+ * @param us horizontal coordinates for interpolation window
+ * @param vs vertical coordinates for interpolation window
+ * @param du horizontal relative coordinate
+ * @param dv vertical relative coordinate
+ */
 static void xyz_to_cube6x1(const PanoramaContext *s,
                            const float *vec, int width, int height,
                            uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
@@ -1048,6 +1249,16 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
     }
 }
 
+/**
+ * Calculate 3D coordinates on sphere for corresponding frame position in equirectangular format.
+ *
+ * @param s filter context
+ * @param i horizontal position on frame [0, height)
+ * @param j vertical position on frame [0, width)
+ * @param width frame width
+ * @param height frame height
+ * @param vec coordinates on sphere
+ */
 static void equirect_to_xyz(const PanoramaContext *s,
                             int i, int j, int width, int height,
                             float *vec)
@@ -1065,6 +1276,18 @@ static void equirect_to_xyz(const PanoramaContext *s,
     vec[2] = -cos_theta * cos_phi;
 }
 
+/**
+ * Calculate frame position in equirectangular format for corresponding 3D coordinates on sphere.
+ *
+ * @param s filter context
+ * @param vec coordinates on sphere
+ * @param width frame width
+ * @param height frame height
+ * @param us horizontal coordinates for interpolation window
+ * @param vs vertical coordinates for interpolation window
+ * @param du horizontal relative coordinate
+ * @param dv vertical relative coordinate
+ */
 static void xyz_to_equirect(const PanoramaContext *s,
                             const float *vec, int width, int height,
                             uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
@@ -1091,6 +1314,13 @@ static void xyz_to_equirect(const PanoramaContext *s,
     }
 }
 
+/**
+ * Prepare data for processing equi-angular cubemap input format.
+ *
+ * @param s filter context
+
+ * @return error code
+ */
 static int prepare_eac_in(PanoramaContext *s)
 {
     s->in_cubemap_face_order[RIGHT] = TOP_RIGHT;
@@ -1110,6 +1340,13 @@ static int prepare_eac_in(PanoramaContext *s)
     return 0;
 }
 
+/**
+ * Prepare data for processing equi-angular cubemap output format.
+ *
+ * @param s filter context
+ *
+ * @return error code
+ */
 static int prepare_eac_out(PanoramaContext *s)
 {
     s->out_cubemap_direction_order[TOP_LEFT] = LEFT;
@@ -1129,6 +1366,16 @@ static int prepare_eac_out(PanoramaContext *s)
     return 0;
 }
 
+/**
+ * Calculate 3D coordinates on sphere for corresponding frame position in equi-angular cubemap format.
+ *
+ * @param s filter context
+ * @param i horizontal position on frame [0, height)
+ * @param j vertical position on frame [0, width)
+ * @param width frame width
+ * @param height frame height
+ * @param vec coordinates on sphere
+ */
 static void eac_to_xyz(const PanoramaContext *s,
                        int i, int j, int width, int height,
                        float *vec)
@@ -1168,6 +1415,18 @@ static void eac_to_xyz(const PanoramaContext *s,
     cube_to_xyz(s, uf, vf, face, vec);
 }
 
+/**
+ * Calculate frame position in equi-angular cubemap format for corresponding 3D coordinates on sphere.
+ *
+ * @param s filter context
+ * @param vec coordinates on sphere
+ * @param width frame width
+ * @param height frame height
+ * @param us horizontal coordinates for interpolation window
+ * @param vs vertical coordinates for interpolation window
+ * @param du horizontal relative coordinate
+ * @param dv vertical relative coordinate
+ */
 static void xyz_to_eac(const PanoramaContext *s,
                        const float *vec, int width, int height,
                        uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
@@ -1224,6 +1483,13 @@ static void xyz_to_eac(const PanoramaContext *s,
     }
 }
 
+/**
+ * Prepare data for processing flat output format.
+ *
+ * @param s filter context
+ *
+ * @return error code
+ */
 static int prepare_flat_out(PanoramaContext *s)
 {
     const float h_angle = s->h_fov * M_PI / 360.f;
@@ -1241,6 +1507,16 @@ static int prepare_flat_out(PanoramaContext *s)
     return 0;
 }
 
+/**
+ * Calculate 3D coordinates on sphere for corresponding frame position in flat format.
+ *
+ * @param s filter context
+ * @param i horizontal position on frame [0, height)
+ * @param j vertical position on frame [0, width)
+ * @param width frame width
+ * @param height frame height
+ * @param vec coordinates on sphere
+ */
 static void flat_to_xyz(const PanoramaContext *s,
                         int i, int j, int width, int height,
                         float *vec)
@@ -1256,6 +1532,9 @@ static void flat_to_xyz(const PanoramaContext *s,
     vec[2] = l_z / norm;
 }
 
+/**
+ * Calculate rotation matrix for yaw/pitch/roll angles.
+ */
 static inline void calculate_rotation_matrix(float yaw, float pitch, float roll,
                                              float rot_mat[3][3])
 {
@@ -1279,6 +1558,12 @@ static inline void calculate_rotation_matrix(float yaw, float pitch, float roll,
     rot_mat[2][2] = cos_yaw * cos_pitch;
 }
 
+/**
+ * Rotate vector with given rotation matrix.
+ *
+ * @param rot_mat rotation matrix
+ * @param vec vector
+ */
 static inline void rotate(const float rot_mat[3][3],
                           float *vec)
 {
@@ -1447,6 +1732,7 @@ static int config_output(AVFilterLink *outlink)
     calculate_rotation_matrix(s->yaw, s->pitch, s->roll, rot_mat);
     set_mirror_modifier(s->hflip, s->vflip, s->dflip, mirror_modifier);
 
+    // Calculate remap data
     for (p = 0; p < s->nb_planes; p++) {
         const int width = s->planewidth[p];
         const int height = s->planeheight[p];
