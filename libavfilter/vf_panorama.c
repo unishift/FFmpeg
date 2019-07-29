@@ -345,11 +345,13 @@ static int remap4_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
  *
  * @param du horizontal relative coordinate
  * @param dv vertical relative coordinate
- * @param r remap data
+ * @param shift shift for remap array
+ * @param r_tmp calculated 4x4 window
+ * @param r_void remap data
  */
-static void nearest_kernel(float du, float dv, const XYRemap4 *r_tmp, void *r_void)
+static void nearest_kernel(float du, float dv, int shift, const XYRemap4 *r_tmp, void *r_void)
 {
-    XYRemap1 *r = r_void;
+    XYRemap1 *r = (XYRemap1*)r_void + shift;
     const int i = roundf(dv) + 1;
     const int j = roundf(du) + 1;
 
@@ -362,11 +364,13 @@ static void nearest_kernel(float du, float dv, const XYRemap4 *r_tmp, void *r_vo
  *
  * @param du horizontal relative coordinate
  * @param dv vertical relative coordinate
- * @param r remap data
+ * @param shift shift for remap array
+ * @param r_tmp calculated 4x4 window
+ * @param r_void remap data
  */
-static void bilinear_kernel(float du, float dv, const XYRemap4 *r_tmp, void *r_void)
+static void bilinear_kernel(float du, float dv, int shift, const XYRemap4 *r_tmp, void *r_void)
 {
-    XYRemap2 *r = r_void;
+    XYRemap2 *r = (XYRemap2*)r_void + shift;
     int i, j;
 
     for (i = 0; i < 2; i++) {
@@ -404,11 +408,13 @@ static inline void calculate_bicubic_coeffs(float t, float *coeffs)
  *
  * @param du horizontal relative coordinate
  * @param dv vertical relative coordinate
- * @param r remap data
+ * @param shift shift for remap array
+ * @param r_tmp calculated 4x4 window
+ * @param r_void remap data
  */
-static void bicubic_kernel(float du, float dv, const XYRemap4 *r_tmp, void *r_void)
+static void bicubic_kernel(float du, float dv, int shift, const XYRemap4 *r_tmp, void *r_void)
 {
-    XYRemap4 *r = r_void;
+    XYRemap4 *r = (XYRemap4*)r_void + shift;
     int i, j;
     float du_coeffs[4];
     float dv_coeffs[4];
@@ -456,11 +462,13 @@ static inline void calculate_lanczos_coeffs(float t, float *coeffs)
  *
  * @param du horizontal relative coordinate
  * @param dv vertical relative coordinate
- * @param r remap data
+ * @param shift shift for remap array
+ * @param r_tmp calculated 4x4 window
+ * @param r_void remap data
  */
-static void lanczos_kernel(float du, float dv, const XYRemap4 *r_tmp, void *r_void)
+static void lanczos_kernel(float du, float dv, int shift, const XYRemap4 *r_tmp, void *r_void)
 {
-    XYRemap4 *r = r_void;
+    XYRemap4 *r = (XYRemap4*)r_void + shift;
     int i, j;
     float du_coeffs[4];
     float dv_coeffs[4];
@@ -1550,7 +1558,7 @@ static int config_output(AVFilterLink *outlink)
     void (*out_transform)(const PanoramaContext *s,
                           int i, int j, int width, int height,
                           float *vec);
-    void (*calculate_kernel)(float du, float dv, const XYRemap4 *r_tmp, void *r);
+    void (*calculate_kernel)(float du, float dv, int shift, const XYRemap4 *r_tmp, void *r);
     float rot_mat[3][3];
 
     switch (s->interp) {
@@ -1685,6 +1693,7 @@ static int config_output(AVFilterLink *outlink)
         const int height = s->planeheight[p];
         const int in_width = s->inplanewidth[p];
         const int in_height = s->inplaneheight[p];
+        void *r = s->remap[p];
         float du, dv;
         float vec[3];
         XYRemap4 r_tmp;
@@ -1692,13 +1701,11 @@ static int config_output(AVFilterLink *outlink)
 
         for (i = 0; i < width; i++) {
             for (j = 0; j < height; j++) {
-                void *r = &((uint8_t*)s->remap[p])[(j * width + i) * sizeof_remap];
-
                 out_transform(s, i, j, width, height, vec);
                 rotate(rot_mat, vec);
                 mirror(mirror_modifier, vec);
                 in_transform(s, vec, in_width, in_height, r_tmp.u, r_tmp.v, &du, &dv);
-                calculate_kernel(du, dv, &r_tmp, r);
+                calculate_kernel(du, dv, j * width + i, &r_tmp, r);
             }
         }
     }
