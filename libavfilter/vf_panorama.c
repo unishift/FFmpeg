@@ -108,7 +108,7 @@ typedef struct PanoramaContext {
 
     float yaw, pitch, roll;
 
-    int hflip, vflip, dflip;
+    int h_flip, v_flip, d_flip;
 
     float h_fov, v_fov;
     float flat_range[3];
@@ -149,20 +149,20 @@ static const AVOption panorama_options[] = {
     {      "line", "bilinear",                                   0, AV_OPT_TYPE_CONST,  {.i64=BILINEAR},        0,                   0, FLAGS, "interp" },
     {      "cube", "bicubic",                                    0, AV_OPT_TYPE_CONST,  {.i64=BICUBIC},         0,                   0, FLAGS, "interp" },
     {      "lanc", "lanczos",                                    0, AV_OPT_TYPE_CONST,  {.i64=LANCZOS},         0,                   0, FLAGS, "interp" },
-    {         "w", "output width",                   OFFSET(width), AV_OPT_TYPE_INT,    {.i64=0},               0,           INT64_MAX, FLAGS, "w"},
-    {         "h", "output height",                 OFFSET(height), AV_OPT_TYPE_INT,    {.i64=0},               0,           INT64_MAX, FLAGS, "h"},
+    {         "w", "output width",                   OFFSET(width), AV_OPT_TYPE_INT,    {.i64=0},               0,             INT_MAX, FLAGS, "w"},
+    {         "h", "output height",                 OFFSET(height), AV_OPT_TYPE_INT,    {.i64=0},               0,             INT_MAX, FLAGS, "h"},
     { "in_forder", "input cubemap face order",   OFFSET(in_forder), AV_OPT_TYPE_STRING, {.str="rludfb"},        0,     NB_DIRECTIONS-1, FLAGS, "in_forder"},
     {"out_forder", "output cubemap face order", OFFSET(out_forder), AV_OPT_TYPE_STRING, {.str="rludfb"},        0,     NB_DIRECTIONS-1, FLAGS, "out_forder"},
     {   "in_frot", "input cubemap face rotation",  OFFSET(in_frot), AV_OPT_TYPE_STRING, {.str="000000"},        0,     NB_DIRECTIONS-1, FLAGS, "in_frot"},
     {  "out_frot", "output cubemap face rotation",OFFSET(out_frot), AV_OPT_TYPE_STRING, {.str="000000"},        0,     NB_DIRECTIONS-1, FLAGS, "out_frot"},
-    {       "yaw", "yaw rotation",                     OFFSET(yaw), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},             -M_PI,            M_PI, FLAGS},
-    {     "pitch", "pitch rotation",                 OFFSET(pitch), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},             -M_PI,            M_PI, FLAGS},
-    {      "roll", "roll rotation",                   OFFSET(roll), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},             -M_PI,            M_PI, FLAGS},
-    {     "h_fov", "horizontal field of view",       OFFSET(h_fov), AV_OPT_TYPE_FLOAT,  {.dbl=90.f},              0.f,           180.f, FLAGS},
-    {     "v_fov", "vertical field of view",         OFFSET(v_fov), AV_OPT_TYPE_FLOAT,  {.dbl=45.f},              0.f,            90.f, FLAGS},
-    {     "hflip", "flip video horizontally",        OFFSET(hflip), AV_OPT_TYPE_BOOL,   {.i64=0},                   0,               1, FLAGS},
-    {     "vflip", "flip video vertically",          OFFSET(vflip), AV_OPT_TYPE_BOOL,   {.i64=0},                   0,               1, FLAGS},
-    {     "dflip", "flip video indepth",             OFFSET(dflip), AV_OPT_TYPE_BOOL,   {.i64=0},                   0,               1, FLAGS},
+    {       "yaw", "yaw rotation",                     OFFSET(yaw), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},         -M_PI,                M_PI, FLAGS, "yaw"},
+    {     "pitch", "pitch rotation",                 OFFSET(pitch), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},         -M_PI,                M_PI, FLAGS, "pitch"},
+    {      "roll", "roll rotation",                   OFFSET(roll), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},         -M_PI,                M_PI, FLAGS, "roll"},
+    {     "h_fov", "horizontal field of view",       OFFSET(h_fov), AV_OPT_TYPE_FLOAT,  {.dbl=90.f},          0.f,               180.f, FLAGS, "h_fov"},
+    {     "v_fov", "vertical field of view",         OFFSET(v_fov), AV_OPT_TYPE_FLOAT,  {.dbl=45.f},          0.f,                90.f, FLAGS, "v_fov"},
+    {     "h_flip", "flip video horizontally",      OFFSET(h_flip), AV_OPT_TYPE_BOOL,   {.i64=0},               0,                   1, FLAGS, "h_flip"},
+    {     "v_flip", "flip video vertically",        OFFSET(v_flip), AV_OPT_TYPE_BOOL,   {.i64=0},               0,                   1, FLAGS, "v_flip"},
+    {     "d_flip", "flip video indepth",           OFFSET(d_flip), AV_OPT_TYPE_BOOL,   {.i64=0},               0,                   1, FLAGS, "d_flip"},
     { NULL }
 };
 
@@ -1541,12 +1541,12 @@ static inline void rotate(const float rot_mat[3][3],
     vec[2] = z_tmp;
 }
 
-static inline void set_mirror_modifier(int hflip, int vflip, int dflip,
+static inline void set_mirror_modifier(int h_flip, int v_flip, int d_flip,
                                        float *modifier)
 {
-    modifier[0] = hflip ? -1.f : 1.f;
-    modifier[1] = vflip ? -1.f : 1.f;
-    modifier[2] = dflip ? -1.f : 1.f;
+    modifier[0] = h_flip ? -1.f : 1.f;
+    modifier[1] = v_flip ? -1.f : 1.f;
+    modifier[2] = d_flip ? -1.f : 1.f;
 }
 
 static inline void mirror(const float *modifier,
@@ -1695,7 +1695,7 @@ static int config_output(AVFilterLink *outlink)
     }
 
     calculate_rotation_matrix(s->yaw, s->pitch, s->roll, rot_mat);
-    set_mirror_modifier(s->hflip, s->vflip, s->dflip, mirror_modifier);
+    set_mirror_modifier(s->h_flip, s->v_flip, s->d_flip, mirror_modifier);
 
     // Calculate remap data
     for (p = 0; p < s->nb_planes; p++) {
