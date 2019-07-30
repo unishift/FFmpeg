@@ -1492,17 +1492,16 @@ static void flat_to_xyz(const PanoramaContext *s,
 static inline void calculate_rotation_matrix(float yaw, float pitch, float roll,
                                              float rot_mat[3][3])
 {
-    // Convert angles to radians
-    yaw   *= M_PI / 180.f;
-    pitch *= M_PI / 180.f;
-    roll  *= M_PI / 180.f;
+    const float yaw_rad   = yaw   * M_PI / 180.f;
+    const float pitch_rad = pitch * M_PI / 180.f;
+    const float roll_rad  = roll  * M_PI / 180.f;
 
-    const float sin_yaw   = sinf(-yaw);
-    const float cos_yaw   = cosf(-yaw);
-    const float sin_pitch = sinf(pitch);
-    const float cos_pitch = cosf(pitch);
-    const float sin_roll  = sinf(roll);
-    const float cos_roll  = cosf(roll);
+    const float sin_yaw   = sinf(-yaw_rad);
+    const float cos_yaw   = cosf(-yaw_rad);
+    const float sin_pitch = sinf(pitch_rad);
+    const float cos_pitch = cosf(pitch_rad);
+    const float sin_roll  = sinf(roll_rad);
+    const float cos_roll  = cosf(roll_rad);
 
     rot_mat[0][0] = sin_yaw * sin_pitch * sin_roll + cos_yaw * cos_roll;
     rot_mat[0][1] = sin_yaw * sin_pitch * cos_roll - cos_yaw * sin_roll;
