@@ -13470,12 +13470,16 @@ Available methods:
 
 @table @samp
 @item near
+@item nearest
 Nearest neighbour.
 @item line
+@item linear
 Bilinear interpolation.
 @item cube
+@item cubic
 Bicubic interpolation.
 @item lanc
+@item lanczos
 Lanczos interpolation.
 @end table
 
