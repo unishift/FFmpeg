@@ -1636,32 +1636,32 @@ static int config_output(AVFilterLink *outlink)
     case EQUIRECTANGULAR:
         out_transform = equirect_to_xyz;
         err = 0;
-        w = wf;
-        h = hf;
+        w = roundf(wf);
+        h = roundf(hf);
         break;
     case CUBEMAP_3_2:
         out_transform = cube3x2_to_xyz;
         err = prepare_cube_out(ctx);
-        w = wf / 4.f * 3.f;
-        h = hf;
+        w = roundf(wf / 4.f * 3.f);
+        h = roundf(hf);
         break;
     case CUBEMAP_6_1:
         out_transform = cube6x1_to_xyz;
         err = prepare_cube_out(ctx);
-        w = wf / 2.f * 3.f;
-        h = hf / 2.f;
+        w = roundf(wf / 2.f * 3.f);
+        h = roundf(hf / 2.f);
         break;
     case EQUIANGULAR:
         out_transform = eac_to_xyz;
         err = prepare_eac_out(ctx);
-        w = wf;
-        h = hf / 8.f * 9.f;
+        w = roundf(wf);
+        h = roundf(hf / 8.f * 9.f);
         break;
     case FLAT:
         out_transform = flat_to_xyz;
         err = prepare_flat_out(ctx);
-        w = wf * s->flat_range[0] / s->flat_range[1] / 2.f;
-        h = hf;
+        w = roundf(wf * s->flat_range[0] / s->flat_range[1] / 2.f);
+        h = roundf(hf);
         break;
     }
 
