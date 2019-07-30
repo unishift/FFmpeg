@@ -149,9 +149,9 @@ static const AVOption panorama_options[] = {
     {"out_forder", "output cubemap face order", OFFSET(out_forder), AV_OPT_TYPE_STRING, {.str="rludfb"},        0,     NB_DIRECTIONS-1, FLAGS, "out_forder"},
     {   "in_frot", "input cubemap face rotation",  OFFSET(in_frot), AV_OPT_TYPE_STRING, {.str="000000"},        0,     NB_DIRECTIONS-1, FLAGS, "in_frot"},
     {  "out_frot", "output cubemap face rotation",OFFSET(out_frot), AV_OPT_TYPE_STRING, {.str="000000"},        0,     NB_DIRECTIONS-1, FLAGS, "out_frot"},
-    {       "yaw", "yaw rotation",                     OFFSET(yaw), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},         -M_PI,                M_PI, FLAGS, "yaw"},
-    {     "pitch", "pitch rotation",                 OFFSET(pitch), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},         -M_PI,                M_PI, FLAGS, "pitch"},
-    {      "roll", "roll rotation",                   OFFSET(roll), AV_OPT_TYPE_FLOAT,  {.dbl=0.0},         -M_PI,                M_PI, FLAGS, "roll"},
+    {       "yaw", "yaw rotation",                     OFFSET(yaw), AV_OPT_TYPE_FLOAT,  {.dbl=0.f},        -180.f,               180.f, FLAGS, "yaw"},
+    {     "pitch", "pitch rotation",                 OFFSET(pitch), AV_OPT_TYPE_FLOAT,  {.dbl=0.f},        -180.f,               180.f, FLAGS, "pitch"},
+    {      "roll", "roll rotation",                   OFFSET(roll), AV_OPT_TYPE_FLOAT,  {.dbl=0.f},        -180.f,               180.f, FLAGS, "roll"},
     {     "h_fov", "horizontal field of view",       OFFSET(h_fov), AV_OPT_TYPE_FLOAT,  {.dbl=90.f},          0.f,               180.f, FLAGS, "h_fov"},
     {     "v_fov", "vertical field of view",         OFFSET(v_fov), AV_OPT_TYPE_FLOAT,  {.dbl=45.f},          0.f,                90.f, FLAGS, "v_fov"},
     {     "h_flip", "flip video horizontally",      OFFSET(h_flip), AV_OPT_TYPE_BOOL,   {.i64=0},               0,                   1, FLAGS, "h_flip"},
@@ -1505,6 +1505,11 @@ static void flat_to_xyz(const PanoramaContext *s,
 static inline void calculate_rotation_matrix(float yaw, float pitch, float roll,
                                              float rot_mat[3][3])
 {
+    // Convert angles to radians
+    yaw   *= M_PI / 180.f;
+    pitch *= M_PI / 180.f;
+    roll  *= M_PI / 180.f;
+
     const float sin_yaw = sinf(-yaw);
     const float cos_yaw = cosf(-yaw);
     const float sin_pitch = sinf(pitch);
