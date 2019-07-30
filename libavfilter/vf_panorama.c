@@ -452,7 +452,7 @@ static inline void calculate_lanczos_coeffs(float t, float *coeffs)
         sum += coeffs[i];
     }
 
-    for (int i = 0; i < 4; i++) {
+    for (i = 0; i < 4; i++) {
         coeffs[i] /= sum;
     }
 }
@@ -563,13 +563,15 @@ static int prepare_cube_in(AVFilterContext *ctx)
         int direction;
 
         if (c == '\0') {
-            av_log(ctx, AV_LOG_ERROR, "Incomplete in_forder option. Direction for all 6 faces should be specified.\n");
+            av_log(ctx, AV_LOG_ERROR,
+                   "Incomplete in_forder option. Direction for all 6 faces should be specified.\n");
             return AVERROR(EINVAL);
         }
 
         direction = get_direction(c);
         if (direction == -1) {
-            av_log(ctx, AV_LOG_ERROR, "Incorrect direction symbol in in_forder option.\n");
+            av_log(ctx, AV_LOG_ERROR,
+                   "Incorrect direction symbol in in_forder option.\n");
             return AVERROR(EINVAL);
         }
 
@@ -581,13 +583,15 @@ static int prepare_cube_in(AVFilterContext *ctx)
         int rotation;
 
         if (c == '\0') {
-            av_log(ctx, AV_LOG_ERROR, "Incomplete in_frot option. Rotation for all 6 faces should be specified.\n");
+            av_log(ctx, AV_LOG_ERROR,
+                   "Incomplete in_frot option. Rotation for all 6 faces should be specified.\n");
             return AVERROR(EINVAL);
         }
 
         rotation = get_rotation(c);
         if (rotation == -1) {
-            av_log(ctx, AV_LOG_ERROR, "Incorrect rotation symbol in in_frot option.\n");
+            av_log(ctx, AV_LOG_ERROR,
+                   "Incorrect rotation symbol in in_frot option.\n");
             return AVERROR(EINVAL);
         }
 
@@ -613,13 +617,15 @@ static int prepare_cube_out(AVFilterContext *ctx)
         int direction;
 
         if (c == '\0') {
-            av_log(ctx, AV_LOG_ERROR, "Incomplete out_forder option. Direction for all 6 faces should be specified.\n");
+            av_log(ctx, AV_LOG_ERROR,
+                   "Incomplete out_forder option. Direction for all 6 faces should be specified.\n");
             return AVERROR(EINVAL);
         }
 
         direction = get_direction(c);
         if (direction == -1) {
-            av_log(ctx, AV_LOG_ERROR, "Incorrect direction symbol in out_forder option.\n");
+            av_log(ctx, AV_LOG_ERROR,
+                   "Incorrect direction symbol in out_forder option.\n");
             return AVERROR(EINVAL);
         }
 
@@ -631,13 +637,15 @@ static int prepare_cube_out(AVFilterContext *ctx)
         int rotation;
 
         if (c == '\0') {
-            av_log(ctx, AV_LOG_ERROR, "Incomplete out_frot option. Rotation for all 6 faces should be specified.\n");
+            av_log(ctx, AV_LOG_ERROR,
+                   "Incomplete out_frot option. Rotation for all 6 faces should be specified.\n");
             return AVERROR(EINVAL);
         }
 
         rotation = get_rotation(c);
         if (rotation == -1) {
-            av_log(ctx, AV_LOG_ERROR, "Incorrect rotation symbol in out_frot option.\n");
+            av_log(ctx, AV_LOG_ERROR,
+                   "Incorrect rotation symbol in out_frot option.\n");
             return AVERROR(EINVAL);
         }
 
@@ -655,9 +663,9 @@ static inline void rotate_cube_face(float *uf, float *vf, int rotation)
     case ROT_0:
         break;
     case ROT_90:
-        tmp = *uf;
+        tmp =  *uf;
         *uf = -*vf;
-        *vf = tmp;
+        *vf =  tmp;
         break;
     case ROT_180:
         *uf = -*uf;
@@ -665,8 +673,8 @@ static inline void rotate_cube_face(float *uf, float *vf, int rotation)
         break;
     case ROT_270:
         tmp = -*uf;
-        *uf = *vf;
-        *vf = tmp;
+        *uf =  *vf;
+        *vf =  tmp;
         break;
     }
 }
@@ -680,17 +688,17 @@ static inline void rotate_cube_face_inverse(float *uf, float *vf, int rotation)
         break;
     case ROT_90:
         tmp = -*uf;
-        *uf = *vf;
-        *vf = tmp;
+        *uf =  *vf;
+        *vf =  tmp;
         break;
     case ROT_180:
         *uf = -*uf;
         *vf = -*vf;
         break;
     case ROT_270:
-        tmp = *uf;
+        tmp =  *uf;
         *uf = -*vf;
-        *vf = tmp;
+        *vf =  tmp;
         break;
     }
 }
@@ -870,33 +878,33 @@ static void process_cube_coordinates(const PanoramaContext *s,
         switch (direction) {
         case RIGHT:
             direction = FRONT;
-            *new_uf = uf;
-            *new_vf = vf;
+            *new_uf =  uf;
+            *new_vf =  vf;
             break;
         case LEFT:
             direction = BACK;
-            *new_uf = uf;
-            *new_vf = vf;
+            *new_uf =  uf;
+            *new_vf =  vf;
             break;
         case UP:
             direction = LEFT;
-            *new_uf = vf;
+            *new_uf =  vf;
             *new_vf = -uf;
             break;
         case DOWN:
             direction = LEFT;
             *new_uf = -vf;
-            *new_vf = uf;
+            *new_vf =  uf;
             break;
         case FRONT:
             direction = LEFT;
-            *new_uf = uf;
-            *new_vf = vf;
+            *new_uf =  uf;
+            *new_vf =  vf;
             break;
         case BACK:
             direction = RIGHT;
-            *new_uf = uf;
-            *new_vf = vf;
+            *new_uf =  uf;
+            *new_vf =  vf;
             break;
         }
     } else if (uf >= 1.f) {
@@ -904,33 +912,33 @@ static void process_cube_coordinates(const PanoramaContext *s,
         switch (direction) {
         case RIGHT:
             direction = BACK;
-            *new_uf = uf;
-            *new_vf = vf;
+            *new_uf =  uf;
+            *new_vf =  vf;
             break;
         case LEFT:
             direction = FRONT;
-            *new_uf = uf;
-            *new_vf = vf;
+            *new_uf =  uf;
+            *new_vf =  vf;
             break;
         case UP:
             direction = RIGHT;
             *new_uf = -vf;
-            *new_vf = uf;
+            *new_vf =  uf;
             break;
         case DOWN:
             direction = RIGHT;
-            *new_uf = vf;
+            *new_uf =  vf;
             *new_vf = -uf;
             break;
         case FRONT:
             direction = RIGHT;
-            *new_uf = uf;
-            *new_vf = vf;
+            *new_uf =  uf;
+            *new_vf =  vf;
             break;
         case BACK:
             direction = LEFT;
-            *new_uf = uf;
-            *new_vf = vf;
+            *new_uf =  uf;
+            *new_vf =  vf;
             break;
         }
     } else if (vf < -1.f) {
@@ -938,13 +946,13 @@ static void process_cube_coordinates(const PanoramaContext *s,
         switch (direction) {
         case RIGHT:
             direction = UP;
-            *new_uf = vf;
+            *new_uf =  vf;
             *new_vf = -uf;
             break;
         case LEFT:
             direction = UP;
             *new_uf = -vf;
-            *new_vf = uf;
+            *new_vf =  uf;
             break;
         case UP:
             direction = BACK;
@@ -953,13 +961,13 @@ static void process_cube_coordinates(const PanoramaContext *s,
             break;
         case DOWN:
             direction = FRONT;
-            *new_uf = uf;
-            *new_vf = vf;
+            *new_uf =  uf;
+            *new_vf =  vf;
             break;
         case FRONT:
             direction = UP;
-            *new_uf = uf;
-            *new_vf = vf;
+            *new_uf =  uf;
+            *new_vf =  vf;
             break;
         case BACK:
             direction = UP;
@@ -973,17 +981,17 @@ static void process_cube_coordinates(const PanoramaContext *s,
         case RIGHT:
             direction = DOWN;
             *new_uf = -vf;
-            *new_vf = uf;
+            *new_vf =  uf;
             break;
         case LEFT:
             direction = DOWN;
-            *new_uf = vf;
+            *new_uf =  vf;
             *new_vf = -uf;
             break;
         case UP:
             direction = FRONT;
-            *new_uf = uf;
-            *new_vf = vf;
+            *new_uf =  uf;
+            *new_vf =  vf;
             break;
         case DOWN:
             direction = BACK;
@@ -992,8 +1000,8 @@ static void process_cube_coordinates(const PanoramaContext *s,
             break;
         case FRONT:
             direction = DOWN;
-            *new_uf = uf;
-            *new_vf = vf;
+            *new_uf =  uf;
+            *new_vf =  vf;
             break;
         case BACK:
             direction = DOWN;
@@ -1032,13 +1040,13 @@ static void cube3x2_to_xyz(const PanoramaContext *s,
     const int v_face = floorf(j / eh);
     const int face = u_face + 3 * v_face;
 
-    const int ushift = ceilf(ew * u_face);
-    const int vshift = ceilf(eh * v_face);
-    const int ewi = ceilf(ew * (u_face + 1)) - ushift;
-    const int ehi = ceilf(eh * (v_face + 1)) - vshift;
+    const int u_shift = ceilf(ew * u_face);
+    const int v_shift = ceilf(eh * v_face);
+    const int ewi = ceilf(ew * (u_face + 1)) - u_shift;
+    const int ehi = ceilf(eh * (v_face + 1)) - v_shift;
 
-    const float uf = 2.f * (i - ushift) / ewi - 1.f;
-    const float vf = 2.f * (j - vshift) / ehi - 1.f;
+    const float uf = 2.f * (i - u_shift) / ewi - 1.f;
+    const float vf = 2.f * (j - v_shift) / ehi - 1.f;
 
     cube_to_xyz(s, uf, vf, face, vec);
 }
@@ -1268,18 +1276,18 @@ static int prepare_eac_in(AVFilterContext *ctx)
     PanoramaContext *s = ctx->priv;
 
     s->in_cubemap_face_order[RIGHT] = TOP_RIGHT;
-    s->in_cubemap_face_order[LEFT] = TOP_LEFT;
-    s->in_cubemap_face_order[UP] = BOTTOM_RIGHT;
-    s->in_cubemap_face_order[DOWN] = BOTTOM_LEFT;
+    s->in_cubemap_face_order[LEFT]  = TOP_LEFT;
+    s->in_cubemap_face_order[UP]    = BOTTOM_RIGHT;
+    s->in_cubemap_face_order[DOWN]  = BOTTOM_LEFT;
     s->in_cubemap_face_order[FRONT] = TOP_MIDDLE;
-    s->in_cubemap_face_order[BACK] = BOTTOM_MIDDLE;
+    s->in_cubemap_face_order[BACK]  = BOTTOM_MIDDLE;
 
-    s->in_cubemap_face_rotation[TOP_LEFT] = ROT_0;
-    s->in_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
-    s->in_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
-    s->in_cubemap_face_rotation[BOTTOM_LEFT] = ROT_270;
+    s->in_cubemap_face_rotation[TOP_LEFT]      = ROT_0;
+    s->in_cubemap_face_rotation[TOP_MIDDLE]    = ROT_0;
+    s->in_cubemap_face_rotation[TOP_RIGHT]     = ROT_0;
+    s->in_cubemap_face_rotation[BOTTOM_LEFT]   = ROT_270;
     s->in_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_90;
-    s->in_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_270;
+    s->in_cubemap_face_rotation[BOTTOM_RIGHT]  = ROT_270;
 
     return 0;
 }
@@ -1295,19 +1303,19 @@ static int prepare_eac_out(AVFilterContext *ctx)
 {
     PanoramaContext *s = ctx->priv;
 
-    s->out_cubemap_direction_order[TOP_LEFT] = LEFT;
-    s->out_cubemap_direction_order[TOP_MIDDLE] = FRONT;
-    s->out_cubemap_direction_order[TOP_RIGHT] = RIGHT;
-    s->out_cubemap_direction_order[BOTTOM_LEFT] = DOWN;
+    s->out_cubemap_direction_order[TOP_LEFT]      = LEFT;
+    s->out_cubemap_direction_order[TOP_MIDDLE]    = FRONT;
+    s->out_cubemap_direction_order[TOP_RIGHT]     = RIGHT;
+    s->out_cubemap_direction_order[BOTTOM_LEFT]   = DOWN;
     s->out_cubemap_direction_order[BOTTOM_MIDDLE] = BACK;
-    s->out_cubemap_direction_order[BOTTOM_RIGHT] = UP;
+    s->out_cubemap_direction_order[BOTTOM_RIGHT]  = UP;
 
-    s->out_cubemap_face_rotation[TOP_LEFT] = ROT_0;
-    s->out_cubemap_face_rotation[TOP_MIDDLE] = ROT_0;
-    s->out_cubemap_face_rotation[TOP_RIGHT] = ROT_0;
-    s->out_cubemap_face_rotation[BOTTOM_LEFT] = ROT_270;
+    s->out_cubemap_face_rotation[TOP_LEFT]      = ROT_0;
+    s->out_cubemap_face_rotation[TOP_MIDDLE]    = ROT_0;
+    s->out_cubemap_face_rotation[TOP_RIGHT]     = ROT_0;
+    s->out_cubemap_face_rotation[BOTTOM_LEFT]   = ROT_270;
     s->out_cubemap_face_rotation[BOTTOM_MIDDLE] = ROT_90;
-    s->out_cubemap_face_rotation[BOTTOM_RIGHT] = ROT_270;
+    s->out_cubemap_face_rotation[BOTTOM_RIGHT]  = ROT_270;
 
     return 0;
 }
@@ -1343,7 +1351,6 @@ static void eac_to_xyz(const PanoramaContext *s,
 
     float uf = tanf(M_PI_2 * ((0.5f + i - u_shift) / ewi - 0.5f));
     float vf = tanf(M_PI_2 * ((0.5f + j - v_shift) / ehi - 0.5f));
-
 
     // Process padding
     switch (face) {
@@ -1490,12 +1497,12 @@ static inline void calculate_rotation_matrix(float yaw, float pitch, float roll,
     pitch *= M_PI / 180.f;
     roll  *= M_PI / 180.f;
 
-    const float sin_yaw = sinf(-yaw);
-    const float cos_yaw = cosf(-yaw);
+    const float sin_yaw   = sinf(-yaw);
+    const float cos_yaw   = cosf(-yaw);
     const float sin_pitch = sinf(pitch);
     const float cos_pitch = cosf(pitch);
-    const float sin_roll = sinf(roll);
-    const float cos_roll = cosf(roll);
+    const float sin_roll  = sinf(roll);
+    const float cos_roll  = cosf(roll);
 
     rot_mat[0][0] = sin_yaw * sin_pitch * sin_roll + cos_yaw * cos_roll;
     rot_mat[0][1] = sin_yaw * sin_pitch * cos_roll - cos_yaw * sin_roll;
@@ -1666,8 +1673,8 @@ static int config_output(AVFilterLink *outlink)
 
     s->planeheight[1] = s->planeheight[2] = FF_CEIL_RSHIFT(h, desc->log2_chroma_h);
     s->planeheight[0] = s->planeheight[3] = h;
-    s->planewidth[1] = s->planewidth[2] = FF_CEIL_RSHIFT(w, desc->log2_chroma_w);
-    s->planewidth[0] = s->planewidth[3] = w;
+    s->planewidth[1]  = s->planewidth[2] = FF_CEIL_RSHIFT(w, desc->log2_chroma_w);
+    s->planewidth[0]  = s->planewidth[3] = w;
 
     outlink->h = h;
     outlink->w = w;
@@ -1677,7 +1684,6 @@ static int config_output(AVFilterLink *outlink)
     s->inplanewidth[1]  = s->inplanewidth[2]  = FF_CEIL_RSHIFT(inlink->w, desc->log2_chroma_w);
     s->inplanewidth[0]  = s->inplanewidth[3]  = inlink->w;
     s->nb_planes = av_pix_fmt_count_planes(inlink->format);
-
 
     for (p = 0; p < s->nb_planes; p++) {
         remap_data_size += (float)s->planewidth[p] * s->planeheight[p] * sizeof_remap;
