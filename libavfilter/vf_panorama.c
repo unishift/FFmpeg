@@ -566,22 +566,26 @@ static int get_rotation(char c)
 /**
  * Prepare data for processing cubemap input format.
  *
- * @param s filter context
+ * @param ctx filter context
  *
  * @return error code
  */
-static int prepare_cube_in(PanoramaContext *s)
+static int prepare_cube_in(AVFilterContext *ctx)
 {
+    PanoramaContext *s = ctx->priv;
+
     for (int face = 0; face < NB_FACES; face++) {
         const char c = s->in_forder[face];
         int direction;
 
         if (c == '\0') {
+            av_log(ctx, AV_LOG_ERROR, "Incomplete in_forder option. Direction for all 6 faces should be specified.\n");
             return AVERROR(EINVAL);
         }
 
         direction = get_direction(c);
         if (direction == -1) {
+            av_log(ctx, AV_LOG_ERROR, "Incorrect direction symbol in in_forder option.\n");
             return AVERROR(EINVAL);
         }
 
@@ -593,11 +597,13 @@ static int prepare_cube_in(PanoramaContext *s)
         int rotation;
 
         if (c == '\0') {
+            av_log(ctx, AV_LOG_ERROR, "Incomplete in_frot option. Rotation for all 6 faces should be specified.\n");
             return AVERROR(EINVAL);
         }
 
         rotation = get_rotation(c);
         if (rotation == -1) {
+            av_log(ctx, AV_LOG_ERROR, "Incorrect rotation symbol in in_frot option.\n");
             return AVERROR(EINVAL);
         }
 
@@ -610,22 +616,26 @@ static int prepare_cube_in(PanoramaContext *s)
 /**
  * Prepare data for processing cubemap output format.
  *
- * @param s filter context
+ * @param ctx filter context
  *
  * @return error code
  */
-static int prepare_cube_out(PanoramaContext *s)
+static int prepare_cube_out(AVFilterContext *ctx)
 {
+    PanoramaContext *s = ctx->priv;
+
     for (int face = 0; face < NB_FACES; face++) {
         const char c = s->out_forder[face];
         int direction;
 
         if (c == '\0') {
+            av_log(ctx, AV_LOG_ERROR, "Incomplete out_forder option. Direction for all 6 faces should be specified.\n");
             return AVERROR(EINVAL);
         }
 
         direction = get_direction(c);
         if (direction == -1) {
+            av_log(ctx, AV_LOG_ERROR, "Incorrect direction symbol in out_forder option.\n");
             return AVERROR(EINVAL);
         }
 
@@ -637,11 +647,13 @@ static int prepare_cube_out(PanoramaContext *s)
         int rotation;
 
         if (c == '\0') {
+            av_log(ctx, AV_LOG_ERROR, "Incomplete out_frot option. Rotation for all 6 faces should be specified.\n");
             return AVERROR(EINVAL);
         }
 
         rotation = get_rotation(c);
         if (rotation == -1) {
+            av_log(ctx, AV_LOG_ERROR, "Incorrect rotation symbol in out_frot option.\n");
             return AVERROR(EINVAL);
         }
 
@@ -1266,12 +1278,14 @@ static void xyz_to_equirect(const PanoramaContext *s,
 /**
  * Prepare data for processing equi-angular cubemap input format.
  *
- * @param s filter context
+ * @param ctx filter context
 
  * @return error code
  */
-static int prepare_eac_in(PanoramaContext *s)
+static int prepare_eac_in(AVFilterContext *ctx)
 {
+    PanoramaContext *s = ctx->priv;
+
     s->in_cubemap_face_order[RIGHT] = TOP_RIGHT;
     s->in_cubemap_face_order[LEFT] = TOP_LEFT;
     s->in_cubemap_face_order[UP] = BOTTOM_RIGHT;
@@ -1292,12 +1306,14 @@ static int prepare_eac_in(PanoramaContext *s)
 /**
  * Prepare data for processing equi-angular cubemap output format.
  *
- * @param s filter context
+ * @param ctx filter context
  *
  * @return error code
  */
-static int prepare_eac_out(PanoramaContext *s)
+static int prepare_eac_out(AVFilterContext *ctx)
 {
+    PanoramaContext *s = ctx->priv;
+
     s->out_cubemap_direction_order[TOP_LEFT] = LEFT;
     s->out_cubemap_direction_order[TOP_MIDDLE] = FRONT;
     s->out_cubemap_direction_order[TOP_RIGHT] = RIGHT;
@@ -1435,12 +1451,14 @@ static void xyz_to_eac(const PanoramaContext *s,
 /**
  * Prepare data for processing flat output format.
  *
- * @param s filter context
+ * @param ctx filter context
  *
  * @return error code
  */
-static int prepare_flat_out(PanoramaContext *s)
+static int prepare_flat_out(AVFilterContext *ctx)
 {
+    PanoramaContext *s = ctx->priv;
+
     const float h_angle = s->h_fov * M_PI / 360.f;
     const float v_angle = s->v_fov * M_PI / 360.f;
 
@@ -1547,6 +1565,7 @@ static int config_output(AVFilterLink *outlink)
     AVFilterLink *inlink = ctx->inputs[0];
     PanoramaContext *s = ctx->priv;
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(inlink->format);
+    float remap_data_size = 0.f;
     int sizeof_remap;
     int err;
     int p, h, w;
@@ -1582,8 +1601,6 @@ static int config_output(AVFilterLink *outlink)
         s->panorama_slice = remap4_slice;
         sizeof_remap = sizeof(XYRemap4);
         break;
-    default:
-        return AVERROR(EINVAL);
     }
 
     switch (s->in) {
@@ -1595,23 +1612,24 @@ static int config_output(AVFilterLink *outlink)
         break;
     case CUBEMAP_3_2:
         in_transform = xyz_to_cube3x2;
-        err = prepare_cube_in(s);
+        err = prepare_cube_in(ctx);
         wf = inlink->w / 3.f * 4.f;
         hf = inlink->h;
         break;
     case CUBEMAP_6_1:
         in_transform = xyz_to_cube6x1;
-        err = prepare_cube_in(s);
+        err = prepare_cube_in(ctx);
         wf = inlink->w / 3.f * 2.f;
         hf = inlink->h * 2.f;
         break;
     case EQUIANGULAR:
         in_transform = xyz_to_eac;
-        err = prepare_eac_in(s);
+        err = prepare_eac_in(ctx);
         wf = inlink->w;
         hf = inlink->h / 9.f * 8.f;
         break;
-    default:
+    case FLAT:
+        av_log(ctx, AV_LOG_ERROR, "Flat format is not accepted as input.\n");
         return AVERROR(EINVAL);
     }
 
@@ -1628,30 +1646,28 @@ static int config_output(AVFilterLink *outlink)
         break;
     case CUBEMAP_3_2:
         out_transform = cube3x2_to_xyz;
-        err = prepare_cube_out(s);
+        err = prepare_cube_out(ctx);
         w = wf / 4.f * 3.f;
         h = hf;
         break;
     case CUBEMAP_6_1:
         out_transform = cube6x1_to_xyz;
-        err = prepare_cube_out(s);
+        err = prepare_cube_out(ctx);
         w = wf / 2.f * 3.f;
         h = hf / 2.f;
         break;
     case EQUIANGULAR:
         out_transform = eac_to_xyz;
-        err = prepare_eac_out(s);
+        err = prepare_eac_out(ctx);
         w = wf;
         h = hf / 8.f * 9.f;
         break;
     case FLAT:
         out_transform = flat_to_xyz;
-        err = prepare_flat_out(s);
+        err = prepare_flat_out(ctx);
         w = wf * s->flat_range[0] / s->flat_range[1] / 2.f;
         h = hf;
         break;
-    default:
-        return AVERROR(EINVAL);
     }
 
     if (err != 0) {
@@ -1679,9 +1695,17 @@ static int config_output(AVFilterLink *outlink)
 
 
     for (p = 0; p < s->nb_planes; p++) {
+        remap_data_size += (float)s->planewidth[p] * s->planeheight[p] * sizeof_remap;
+    }
+
+    for (p = 0; p < s->nb_planes; p++) {
         s->remap[p] = av_calloc(s->planewidth[p] * s->planeheight[p], sizeof_remap);
-        if (!s->remap[p])
+        if (!s->remap[p]) {
+            av_log(ctx, AV_LOG_ERROR,
+                   "Not enough memory to allocate remap data. Need at least %.3f GiB.\n",
+                   remap_data_size / (1024 * 1024 * 1024));
             return AVERROR(ENOMEM);
+        }
     }
 
     calculate_rotation_matrix(s->yaw, s->pitch, s->roll, rot_mat);
