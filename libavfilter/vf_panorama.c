@@ -485,22 +485,6 @@ static void lanczos_kernel(float du, float dv, int shift, const XYRemap4 *r_tmp,
     }
 }
 
-static inline int equal(float a, float b, float epsilon)
-{
-    return fabsf(a - b) < epsilon;
-}
-
-static inline int smaller(float a, float b, float epsilon)
-{
-    return ((a - b) < 0.f) && (!equal(a, b, epsilon));
-}
-
-static inline int in_range(float rd, float small, float large, float res)
-{
-   return    !smaller(rd, small, res)
-          &&  smaller(rd, large, res);
-}
-
 /**
  * Modulo operation with only positive remainders.
  *
@@ -776,13 +760,12 @@ static void cube_to_xyz(const PanoramaContext *s,
  *
  * @param s filter context
  * @param vec coordinated on sphere
- * @param res resolution
  * @param uf horizontal cubemap coordinate [0, 1)
  * @param vf vertical cubemap coordinate [0, 1)
  * @param direction direction of view
  */
 static void xyz_to_cube(const PanoramaContext *s,
-                        const float *vec, float res,
+                        const float *vec,
                         float *uf, float *vf, int *direction)
 {
     const float phi   = atan2f(vec[0], -vec[2]);
@@ -790,13 +773,13 @@ static void xyz_to_cube(const PanoramaContext *s,
     float phi_norm, theta_threshold;
     int face;
 
-    if (in_range(phi, -M_PI_4, M_PI_4, res)) {
+    if (phi >= -M_PI_4 && phi < M_PI_4) {
         *direction = FRONT;
         phi_norm = phi;
-    } else if (in_range(phi, -(M_PI_2 + M_PI_4), -M_PI_4, res)) {
+    } else if (phi >= -(M_PI_2 + M_PI_4) && phi < -M_PI_4) {
         *direction = LEFT;
         phi_norm = phi + M_PI_2;
-    } else if (in_range(phi, M_PI_4, M_PI_2 + M_PI_4, res)) {
+    } else if (phi >= M_PI_4 && phi < M_PI_2 + M_PI_4) {
         *direction = RIGHT;
         phi_norm = phi - M_PI_2;
     } else {
@@ -1076,7 +1059,6 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
                            const float *vec, int width, int height,
                            uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
 {
-    const float res = M_PI_4 / (width / 3) / 10.f;
     const float ew = width  / 3.f;
     const float eh = height / 2.f;
     float uf, vf;
@@ -1086,7 +1068,7 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
     int direction, face;
     int u_face, v_face;
 
-    xyz_to_cube(s, vec, res, &uf, &vf, &direction);
+    xyz_to_cube(s, vec, &uf, &vf, &direction);
 
     face = s->in_cubemap_face_order[direction];
     u_face = face % 3;
@@ -1169,7 +1151,6 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
                            const float *vec, int width, int height,
                            uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
 {
-    const float res = M_PI_4 / (width / 6) / 10.f;
     const float ew = width / 6.f;
     const float eh = height;
     float uf, vf;
@@ -1178,7 +1159,7 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
     int i, j;
     int direction, face;
 
-    xyz_to_cube(s, vec, res, &uf, &vf, &direction);
+    xyz_to_cube(s, vec, &uf, &vf, &direction);
 
     face = s->in_cubemap_face_order[direction];
     ewi = ceilf(ew * (face + 1)) - ceilf(ew * face);
@@ -1396,7 +1377,6 @@ static void xyz_to_eac(const PanoramaContext *s,
                        const float *vec, int width, int height,
                        uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
 {
-    const float res = M_PI_4 / (width / 3) / 10.f;
     const float ew = width  / 3.f;
     const float eh = height / 2.f;
     const float upad = 3.f / ew;
@@ -1409,7 +1389,7 @@ static void xyz_to_eac(const PanoramaContext *s,
     int u_face, v_face;
     int u_shift, v_shift;
 
-    xyz_to_cube(s, vec, res, &uf, &vf, &direction);
+    xyz_to_cube(s, vec, &uf, &vf, &direction);
 
     face = s->in_cubemap_face_order[direction];
     switch (face) {
