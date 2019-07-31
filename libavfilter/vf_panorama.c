@@ -575,7 +575,7 @@ static int prepare_cube_in(AVFilterContext *ctx)
         direction = get_direction(c);
         if (direction == -1) {
             av_log(ctx, AV_LOG_ERROR,
-                   "Incorrect direction symbol in in_forder option.\n");
+                   "Incorrect direction symbol '%c' in in_forder option.\n", c);
             return AVERROR(EINVAL);
         }
 
@@ -595,7 +595,7 @@ static int prepare_cube_in(AVFilterContext *ctx)
         rotation = get_rotation(c);
         if (rotation == -1) {
             av_log(ctx, AV_LOG_ERROR,
-                   "Incorrect rotation symbol in in_frot option.\n");
+                   "Incorrect rotation symbol '%c' in in_frot option.\n", c);
             return AVERROR(EINVAL);
         }
 
@@ -629,7 +629,7 @@ static int prepare_cube_out(AVFilterContext *ctx)
         direction = get_direction(c);
         if (direction == -1) {
             av_log(ctx, AV_LOG_ERROR,
-                   "Incorrect direction symbol in out_forder option.\n");
+                   "Incorrect direction symbol '%c' in out_forder option.\n", c);
             return AVERROR(EINVAL);
         }
 
@@ -649,7 +649,7 @@ static int prepare_cube_out(AVFilterContext *ctx)
         rotation = get_rotation(c);
         if (rotation == -1) {
             av_log(ctx, AV_LOG_ERROR,
-                   "Incorrect rotation symbol in out_frot option.\n");
+                   "Incorrect rotation symbol '%c' in out_frot option.\n", c);
             return AVERROR(EINVAL);
         }
 
