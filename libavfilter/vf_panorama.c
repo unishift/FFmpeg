@@ -1350,24 +1350,22 @@ static void eac_to_xyz(const PanoramaContext *s,
     const int ewi = ceilf(ew * (u_face + 1)) - u_shift;
     const int ehi = ceilf(eh * (v_face + 1)) - v_shift;
 
-    const float upad = 3.f / ewi;
-    const float vpad = 3.f / ehi;
-
     float uf = tanf(M_PI_2 * ((0.5f + i - u_shift) / ewi - 0.5f));
     float vf = tanf(M_PI_2 * ((0.5f + j - v_shift) / ehi - 0.5f));
 
+    const float u_pad = 3.f / ewi;
+    const float v_pad = 3.f / ehi;
+
     // Process padding
-    switch (face) {
-        case TOP_LEFT:
-        case BOTTOM_LEFT:
-            uf = (1.f + upad) * (uf + 1.f) - 1.f - 2 * upad;
-            break;
-        case TOP_RIGHT:
-        case BOTTOM_RIGHT:
-            uf = (1.f + upad) * (uf + 1.f) - 1.f;
-            break;
+    switch (u_face) {
+    case 0:
+        uf = (1.f + u_pad) * (uf + 1.f) - 1.f - 2 * u_pad;
+        break;
+    case 2:
+        uf = (1.f + u_pad) * (uf + 1.f) - 1.f;
+        break;
     }
-    vf = (1.f + 2 * vpad) * (vf + 1.f) - 1.f - 2 * vpad;
+    vf = (1.f + 2 * v_pad) * (vf + 1.f) - 1.f - 2 * v_pad;
 
     cube_to_xyz(s, uf, vf, face, vec);
 }
@@ -1390,8 +1388,7 @@ static void xyz_to_eac(const PanoramaContext *s,
 {
     const float ew = width  / 3.f;
     const float eh = height / 2.f;
-    const float upad = 3.f / ew;
-    const float vpad = 3.f / eh;
+    float u_pad, v_pad;
     float uf, vf;
     int ui, vi;
     int ewi, ehi;
@@ -1403,24 +1400,27 @@ static void xyz_to_eac(const PanoramaContext *s,
     xyz_to_cube(s, vec, &uf, &vf, &direction);
 
     face = s->in_cubemap_face_order[direction];
-    switch (face) {
-        case TOP_LEFT:
-        case BOTTOM_LEFT:
-            uf = (uf + 1.f + 2 * upad) / (1.f + upad) - 1.f;
-            break;
-        case TOP_RIGHT:
-        case BOTTOM_RIGHT:
-            uf = (uf + 1.f) / (1.f + upad) - 1.f;
-            break;
-    }
-    vf = (vf + 1.f + 2 * vpad) / (1.f + 2 * vpad) - 1.f;
-
     u_face = face % 3;
     v_face = face / 3;
+
     u_shift = ceilf(ew * u_face);
     v_shift = ceilf(eh * v_face);
     ewi = ceilf(ew * (u_face + 1)) - u_shift;
     ehi = ceilf(eh * (v_face + 1)) - v_shift;
+
+    u_pad = 3.f / ewi;
+    v_pad = 3.f / ehi;
+
+    // Process padding
+    switch (u_face) {
+    case 0:
+        uf = (uf + 1.f + 2 * u_pad) / (1.f + u_pad) - 1.f;
+        break;
+    case 2:
+        uf = (uf + 1.f) / (1.f + u_pad) - 1.f;
+        break;
+    }
+    vf = (vf + 1.f + 2 * v_pad) / (1.f + 2 * v_pad) - 1.f;
 
     uf = ewi * (M_2_PI * atanf(uf) + 0.5f) - 0.5f;
     vf = ehi * (M_2_PI * atanf(vf) + 0.5f) - 0.5f;
@@ -1450,8 +1450,8 @@ static int prepare_flat_out(AVFilterContext *ctx)
 {
     PanoramaContext *s = ctx->priv;
 
-    const float h_angle = s->h_fov * M_PI / 360.f;
-    const float v_angle = s->v_fov * M_PI / 360.f;
+    const float h_angle = 0.5f * s->h_fov * M_PI / 180.f;
+    const float v_angle = 0.5f * s->v_fov * M_PI / 180.f;
 
     const float sin_phi   = sinf(h_angle);
     const float cos_phi   = cosf(h_angle);
