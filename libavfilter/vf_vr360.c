@@ -18,7 +18,7 @@
 
 /**
  * @file
- * Panorama conversion filter.
+ * 360 video conversion filter.
  * Principle of operation:
  *
  * (for each pixel in output frame)\n
@@ -85,7 +85,7 @@ enum Rotation {
     NB_ROTATIONS,
 };
 
-typedef struct PanoramaContext {
+typedef struct VR360Context {
     const AVClass *class;
     int in, out;
     int interp;
@@ -113,20 +113,20 @@ typedef struct PanoramaContext {
 
     void *remap[4];
 
-    int (*panorama_slice)(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs);
-} PanoramaContext;
+    int (*remap_slice)(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs);
+} VR360Context;
 
 typedef struct ThreadData {
-    PanoramaContext *s;
+    VR360Context *s;
     AVFrame *in;
     AVFrame *out;
     int nb_planes;
 } ThreadData;
 
-#define OFFSET(x) offsetof(PanoramaContext, x)
+#define OFFSET(x) offsetof(VR360Context, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
 
-static const AVOption panorama_options[] = {
+static const AVOption vr360_options[] = {
     {     "input", "set input projection",              OFFSET(in), AV_OPT_TYPE_INT,    {.i64=EQUIRECTANGULAR}, 0,    NB_PROJECTIONS-1, FLAGS, "in" },
     {         "e", "equirectangular",                            0, AV_OPT_TYPE_CONST,  {.i64=EQUIRECTANGULAR}, 0,                   0, FLAGS, "in" },
     {      "c3x2", "cubemap3x2",                                 0, AV_OPT_TYPE_CONST,  {.i64=CUBEMAP_3_2},     0,                   0, FLAGS, "in" },
@@ -164,7 +164,7 @@ static const AVOption panorama_options[] = {
     { NULL }
 };
 
-AVFILTER_DEFINE_CLASS(panorama);
+AVFILTER_DEFINE_CLASS(vr360);
 
 static int query_formats(AVFilterContext *ctx)
 {
@@ -199,7 +199,7 @@ typedef struct XYRemap1 {
 static int remap1_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
 {
     ThreadData *td = (ThreadData*)arg;
-    const PanoramaContext *s = td->s;
+    const VR360Context *s = td->s;
     const AVFrame *in = td->in;
     AVFrame *out = td->out;
 
@@ -249,7 +249,7 @@ typedef struct XYRemap2 {
 static int remap2_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
 {
     ThreadData *td = (ThreadData*)arg;
-    const PanoramaContext *s = td->s;
+    const VR360Context *s = td->s;
     const AVFrame *in = td->in;
     AVFrame *out = td->out;
 
@@ -306,7 +306,7 @@ typedef struct XYRemap4 {
 static int remap4_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
 {
     ThreadData *td = (ThreadData*)arg;
-    const PanoramaContext *s = td->s;
+    const VR360Context *s = td->s;
     const AVFrame *in = td->in;
     AVFrame *out = td->out;
 
@@ -560,7 +560,7 @@ static int get_rotation(char c)
  */
 static int prepare_cube_in(AVFilterContext *ctx)
 {
-    PanoramaContext *s = ctx->priv;
+    VR360Context *s = ctx->priv;
 
     for (int face = 0; face < NB_FACES; face++) {
         const char c = s->in_forder[face];
@@ -614,7 +614,7 @@ static int prepare_cube_in(AVFilterContext *ctx)
  */
 static int prepare_cube_out(AVFilterContext *ctx)
 {
-    PanoramaContext *s = ctx->priv;
+    VR360Context *s = ctx->priv;
 
     for (int face = 0; face < NB_FACES; face++) {
         const char c = s->out_forder[face];
@@ -717,7 +717,7 @@ static inline void rotate_cube_face_inverse(float *uf, float *vf, int rotation)
  * @param face face of cubemap
  * @param vec coordinates on sphere
  */
-static void cube_to_xyz(const PanoramaContext *s,
+static void cube_to_xyz(const VR360Context *s,
                         float uf, float vf, int face,
                         float *vec)
 {
@@ -776,7 +776,7 @@ static void cube_to_xyz(const PanoramaContext *s,
  * @param vf vertical cubemap coordinate [0, 1)
  * @param direction direction of view
  */
-static void xyz_to_cube(const PanoramaContext *s,
+static void xyz_to_cube(const VR360Context *s,
                         const float *vec,
                         float *uf, float *vf, int *direction)
 {
@@ -849,7 +849,7 @@ static void xyz_to_cube(const PanoramaContext *s,
  * @param new_vf new vertical cubemap coordinate
  * @param face face position on cubemap
  */
-static void process_cube_coordinates(const PanoramaContext *s,
+static void process_cube_coordinates(const VR360Context *s,
                                 float uf, float vf, int direction,
                                 float *new_uf, float *new_vf, int *face)
 {
@@ -1033,7 +1033,7 @@ static void process_cube_coordinates(const PanoramaContext *s,
  * @param height frame height
  * @param vec coordinates on sphere
  */
-static void cube3x2_to_xyz(const PanoramaContext *s,
+static void cube3x2_to_xyz(const VR360Context *s,
                            int i, int j, int width, int height,
                            float *vec)
 {
@@ -1067,7 +1067,7 @@ static void cube3x2_to_xyz(const PanoramaContext *s,
  * @param du horizontal relative coordinate
  * @param dv vertical relative coordinate
  */
-static void xyz_to_cube3x2(const PanoramaContext *s,
+static void xyz_to_cube3x2(const VR360Context *s,
                            const float *vec, int width, int height,
                            uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
 {
@@ -1129,7 +1129,7 @@ static void xyz_to_cube3x2(const PanoramaContext *s,
  * @param height frame height
  * @param vec coordinates on sphere
  */
-static void cube6x1_to_xyz(const PanoramaContext *s,
+static void cube6x1_to_xyz(const VR360Context *s,
                            int i, int j, int width, int height,
                            float *vec)
 {
@@ -1159,7 +1159,7 @@ static void cube6x1_to_xyz(const PanoramaContext *s,
  * @param du horizontal relative coordinate
  * @param dv vertical relative coordinate
  */
-static void xyz_to_cube6x1(const PanoramaContext *s,
+static void xyz_to_cube6x1(const VR360Context *s,
                            const float *vec, int width, int height,
                            uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
 {
@@ -1213,7 +1213,7 @@ static void xyz_to_cube6x1(const PanoramaContext *s,
  * @param height frame height
  * @param vec coordinates on sphere
  */
-static void equirect_to_xyz(const PanoramaContext *s,
+static void equirect_to_xyz(const VR360Context *s,
                             int i, int j, int width, int height,
                             float *vec)
 {
@@ -1242,7 +1242,7 @@ static void equirect_to_xyz(const PanoramaContext *s,
  * @param du horizontal relative coordinate
  * @param dv vertical relative coordinate
  */
-static void xyz_to_equirect(const PanoramaContext *s,
+static void xyz_to_equirect(const VR360Context *s,
                             const float *vec, int width, int height,
                             uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
 {
@@ -1277,7 +1277,7 @@ static void xyz_to_equirect(const PanoramaContext *s,
  */
 static int prepare_eac_in(AVFilterContext *ctx)
 {
-    PanoramaContext *s = ctx->priv;
+    VR360Context *s = ctx->priv;
 
     s->in_cubemap_face_order[RIGHT] = TOP_RIGHT;
     s->in_cubemap_face_order[LEFT]  = TOP_LEFT;
@@ -1305,7 +1305,7 @@ static int prepare_eac_in(AVFilterContext *ctx)
  */
 static int prepare_eac_out(AVFilterContext *ctx)
 {
-    PanoramaContext *s = ctx->priv;
+    VR360Context *s = ctx->priv;
 
     s->out_cubemap_direction_order[TOP_LEFT]      = LEFT;
     s->out_cubemap_direction_order[TOP_MIDDLE]    = FRONT;
@@ -1334,7 +1334,7 @@ static int prepare_eac_out(AVFilterContext *ctx)
  * @param height frame height
  * @param vec coordinates on sphere
  */
-static void eac_to_xyz(const PanoramaContext *s,
+static void eac_to_xyz(const VR360Context *s,
                        int i, int j, int width, int height,
                        float *vec)
 {
@@ -1382,7 +1382,7 @@ static void eac_to_xyz(const PanoramaContext *s,
  * @param du horizontal relative coordinate
  * @param dv vertical relative coordinate
  */
-static void xyz_to_eac(const PanoramaContext *s,
+static void xyz_to_eac(const VR360Context *s,
                        const float *vec, int width, int height,
                        uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
 {
@@ -1448,7 +1448,7 @@ static void xyz_to_eac(const PanoramaContext *s,
  */
 static int prepare_flat_out(AVFilterContext *ctx)
 {
-    PanoramaContext *s = ctx->priv;
+    VR360Context *s = ctx->priv;
 
     const float h_angle = 0.5f * s->h_fov * M_PI / 180.f;
     const float v_angle = 0.5f * s->v_fov * M_PI / 180.f;
@@ -1475,7 +1475,7 @@ static int prepare_flat_out(AVFilterContext *ctx)
  * @param height frame height
  * @param vec coordinates on sphere
  */
-static void flat_to_xyz(const PanoramaContext *s,
+static void flat_to_xyz(const VR360Context *s,
                         int i, int j, int width, int height,
                         float *vec)
 {
@@ -1558,7 +1558,7 @@ static int config_output(AVFilterLink *outlink)
 {
     AVFilterContext *ctx = outlink->src;
     AVFilterLink *inlink = ctx->inputs[0];
-    PanoramaContext *s = ctx->priv;
+    VR360Context *s = ctx->priv;
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(inlink->format);
     float remap_data_size = 0.f;
     int sizeof_remap;
@@ -1566,10 +1566,10 @@ static int config_output(AVFilterLink *outlink)
     int p, h, w;
     float hf, wf;
     float mirror_modifier[3];
-    void (*in_transform)(const PanoramaContext *s,
+    void (*in_transform)(const VR360Context *s,
                          const float *vec, int width, int height,
                          uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv);
-    void (*out_transform)(const PanoramaContext *s,
+    void (*out_transform)(const VR360Context *s,
                           int i, int j, int width, int height,
                           float *vec);
     void (*calculate_kernel)(float du, float dv, int shift, const XYRemap4 *r_tmp, void *r);
@@ -1578,22 +1578,22 @@ static int config_output(AVFilterLink *outlink)
     switch (s->interp) {
     case NEAREST:
         calculate_kernel = nearest_kernel;
-        s->panorama_slice = remap1_slice;
+        s->remap_slice = remap1_slice;
         sizeof_remap = sizeof(XYRemap1);
         break;
     case BILINEAR:
         calculate_kernel = bilinear_kernel;
-        s->panorama_slice = remap2_slice;
+        s->remap_slice = remap2_slice;
         sizeof_remap = sizeof(XYRemap2);
         break;
     case BICUBIC:
         calculate_kernel = bicubic_kernel;
-        s->panorama_slice = remap4_slice;
+        s->remap_slice = remap4_slice;
         sizeof_remap = sizeof(XYRemap4);
         break;
     case LANCZOS:
         calculate_kernel = lanczos_kernel;
-        s->panorama_slice = remap4_slice;
+        s->remap_slice = remap4_slice;
         sizeof_remap = sizeof(XYRemap4);
         break;
     }
@@ -1735,7 +1735,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
 {
     AVFilterContext *ctx = inlink->dst;
     AVFilterLink *outlink = ctx->outputs[0];
-    PanoramaContext *s = ctx->priv;
+    VR360Context *s = ctx->priv;
     AVFrame *out;
     ThreadData td;
 
@@ -1751,7 +1751,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     td.out = out;
     td.nb_planes = s->nb_planes;
 
-    ctx->internal->execute(ctx, s->panorama_slice, &td, NULL, FFMIN(outlink->h, ff_filter_get_nb_threads(ctx)));
+    ctx->internal->execute(ctx, s->remap_slice, &td, NULL, FFMIN(outlink->h, ff_filter_get_nb_threads(ctx)));
 
     av_frame_free(&in);
     return ff_filter_frame(outlink, out);
@@ -1759,7 +1759,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
 
 static av_cold void uninit(AVFilterContext *ctx)
 {
-    PanoramaContext *s = ctx->priv;
+    VR360Context *s = ctx->priv;
     int p;
 
     for (p = 0; p < s->nb_planes; p++)
@@ -1784,14 +1784,14 @@ static const AVFilterPad outputs[] = {
     { NULL }
 };
 
-AVFilter ff_vf_panorama = {
-    .name          = "panorama",
-    .description   = NULL_IF_CONFIG_SMALL("Convert panorama projection of video."),
-    .priv_size     = sizeof(PanoramaContext),
+AVFilter ff_vf_vr360 = {
+    .name          = "vr360",
+    .description   = NULL_IF_CONFIG_SMALL("Convert 360 projection of video."),
+    .priv_size     = sizeof(VR360Context),
     .uninit        = uninit,
     .query_formats = query_formats,
     .inputs        = inputs,
     .outputs       = outputs,
-    .priv_class    = &panorama_class,
+    .priv_class    = &vr360_class,
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
 };
