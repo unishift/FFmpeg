@@ -1338,36 +1338,89 @@ static void eac_to_xyz(const VR360Context *s,
                        int i, int j, int width, int height,
                        float *vec)
 {
-    const float ew = width  / 3.f;
-    const float eh = height / 2.f;
+    const float pixel_pad = 2;
+    const float u_pad = pixel_pad / width;
+    const float v_pad = pixel_pad / height;
 
-    const int u_face = floorf(i / ew);
-    const int v_face = floorf(j / eh);
-    const int face = u_face + 3 * v_face;
+    int u_face, v_face, face;
 
-    const int u_shift = ceilf(ew * u_face);
-    const int v_shift = ceilf(eh * v_face);
-    const int ewi = ceilf(ew * (u_face + 1)) - u_shift;
-    const int ehi = ceilf(eh * (v_face + 1)) - v_shift;
+    float l_x, l_y, l_z;
+    float norm;
 
-    float uf = tanf(M_PI_2 * ((0.5f + i - u_shift) / ewi - 0.5f));
-    float vf = tanf(M_PI_2 * ((0.5f + j - v_shift) / ehi - 0.5f));
+    float uf = (float)i / width;
+    float vf = (float)j / height;
 
-    const float u_pad = 3.f / ewi;
-    const float v_pad = 3.f / ehi;
+    // EAC has 2-pixel padding on faces except between faces on the same row
+    // Padding pixels seems not to be stretched with tangent as regular pixels
+    // Formulas below approximate original padding as close as I could get experimentally
 
-    // Process padding
-    switch (u_face) {
-    case 0:
-        uf = (1.f + u_pad) * (uf + 1.f) - 1.f - 2 * u_pad;
+    // Horizontal padding
+    uf = 3.f * (uf - u_pad) / (1.f - 2.f * u_pad);
+    if (uf < 0.f) {
+        u_face = 0;
+        uf -= 0.5f;
+    } else if (uf >= 3.f) {
+        u_face = 2;
+        uf -= 2.5f;
+    } else {
+        u_face = floorf(uf);
+        uf = fmodf(uf, 1.f) - 0.5f;
+    }
+
+    // Vertical padding
+    v_face = floorf(vf * 2.f);
+    vf = (vf - v_pad - 0.5f * v_face) / (0.5f - 2.f * v_pad) - 0.5f;
+
+    if (uf >= -0.5f && uf < 0.5f) {
+        uf = tanf(M_PI_2 * uf);
+    } else {
+        uf = 2.f * uf;
+    }
+    if (vf >= -0.5f && vf < 0.5f) {
+        vf = tanf(M_PI_2 * vf);
+    } else {
+        vf = 2.f * vf;
+    }
+
+    face = u_face + 3 * v_face;
+
+    switch (face) {
+    case TOP_LEFT:
+        l_x = -1.f;
+        l_y = -vf;
+        l_z = -uf;
         break;
-    case 2:
-        uf = (1.f + u_pad) * (uf + 1.f) - 1.f;
+    case TOP_MIDDLE:
+        l_x =  uf;
+        l_y = -vf;
+        l_z = -1.f;
+        break;
+    case TOP_RIGHT:
+        l_x =  1.f;
+        l_y = -vf;
+        l_z =  uf;
+        break;
+    case BOTTOM_LEFT:
+        l_x = -vf;
+        l_y = -1.f;
+        l_z =  uf;
+        break;
+    case BOTTOM_MIDDLE:
+        l_x = -vf;
+        l_y =  uf;
+        l_z =  1.f;
+        break;
+    case BOTTOM_RIGHT:
+        l_x = -vf;
+        l_y =  1.f;
+        l_z = -uf;
         break;
     }
-    vf = (1.f + 2 * v_pad) * (vf + 1.f) - 1.f - 2 * v_pad;
 
-    cube_to_xyz(s, uf, vf, face, vec);
+    norm = sqrtf(l_x * l_x + l_y * l_y + l_z * l_z);
+    vec[0] = l_x / norm;
+    vec[1] = l_y / norm;
+    vec[2] = l_z / norm;
 }
 
 /**
@@ -1386,16 +1439,15 @@ static void xyz_to_eac(const VR360Context *s,
                        const float *vec, int width, int height,
                        uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
 {
-    const float ew = width  / 3.f;
-    const float eh = height / 2.f;
-    float u_pad, v_pad;
+    const float pixel_pad = 2;
+    const float u_pad = pixel_pad / width;
+    const float v_pad = pixel_pad / height;
+
     float uf, vf;
     int ui, vi;
-    int ewi, ehi;
     int i, j;
     int direction, face;
     int u_face, v_face;
-    int u_shift, v_shift;
 
     xyz_to_cube(s, vec, &uf, &vf, &direction);
 
@@ -1403,27 +1455,15 @@ static void xyz_to_eac(const VR360Context *s,
     u_face = face % 3;
     v_face = face / 3;
 
-    u_shift = ceilf(ew * u_face);
-    v_shift = ceilf(eh * v_face);
-    ewi = ceilf(ew * (u_face + 1)) - u_shift;
-    ehi = ceilf(eh * (v_face + 1)) - v_shift;
+    uf = M_2_PI * atanf(uf) + 0.5f;
+    vf = M_2_PI * atanf(vf) + 0.5f;
 
-    u_pad = 3.f / ewi;
-    v_pad = 3.f / ehi;
+    // These formulas are inversed from eac_to_xyz ones
+    uf = (uf + u_face) * (1.f - 2.f * u_pad) / 3.f + u_pad;
+    vf = vf * (0.5f - 2.f * v_pad) + v_pad + 0.5f * v_face;
 
-    // Process padding
-    switch (u_face) {
-    case 0:
-        uf = (uf + 1.f + 2 * u_pad) / (1.f + u_pad) - 1.f;
-        break;
-    case 2:
-        uf = (uf + 1.f) / (1.f + u_pad) - 1.f;
-        break;
-    }
-    vf = (vf + 1.f + 2 * v_pad) / (1.f + 2 * v_pad) - 1.f;
-
-    uf = ewi * (M_2_PI * atanf(uf) + 0.5f) - 0.5f;
-    vf = ehi * (M_2_PI * atanf(vf) + 0.5f) - 0.5f;
+    uf *= width;
+    vf *= height;
 
     ui = floorf(uf);
     vi = floorf(vf);
@@ -1433,8 +1473,8 @@ static void xyz_to_eac(const VR360Context *s,
 
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
-            us[i + 1][j + 1] = u_shift + ui + j;
-            vs[i + 1][j + 1] = v_shift + vi + i;
+            us[i + 1][j + 1] = ui + j;
+            vs[i + 1][j + 1] = vi + i;
         }
     }
 }
