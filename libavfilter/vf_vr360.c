@@ -1482,8 +1482,8 @@ static void xyz_to_eac(const VR360Context *s,
 
     for (i = -1; i < 3; i++) {
         for (j = -1; j < 3; j++) {
-            us[i + 1][j + 1] = ui + j;
-            vs[i + 1][j + 1] = vi + i;
+            us[i + 1][j + 1] = av_clip(ui + j, 0, width  - 1);
+            vs[i + 1][j + 1] = av_clip(vi + i, 0, height - 1);
         }
     }
 }
