@@ -1843,5 +1843,5 @@ AVFilter ff_vf_vr360 = {
     .inputs        = inputs,
     .outputs       = outputs,
     .priv_class    = &vr360_class,
-    .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
+    .flags         = AVFILTER_FLAG_SLICE_THREADS,
 };
