@@ -169,10 +169,65 @@ AVFILTER_DEFINE_CLASS(vr360);
 static int query_formats(AVFilterContext *ctx)
 {
     static const enum AVPixelFormat pix_fmts[] = {
-        AV_PIX_FMT_YUVA444P, AV_PIX_FMT_YUVA422P, AV_PIX_FMT_YUVA420P,
-        AV_PIX_FMT_YUVJ444P, AV_PIX_FMT_YUVJ440P, AV_PIX_FMT_YUVJ422P,AV_PIX_FMT_YUVJ420P, AV_PIX_FMT_YUVJ411P,
-        AV_PIX_FMT_YUV444P, AV_PIX_FMT_YUV440P, AV_PIX_FMT_YUV422P, AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUV411P, AV_PIX_FMT_YUV410P,
-        AV_PIX_FMT_GBRP, AV_PIX_FMT_GBRAP, AV_PIX_FMT_GRAY8, AV_PIX_FMT_NONE
+        // YUVA444
+        AV_PIX_FMT_YUVA444P,   AV_PIX_FMT_YUVA444P9,
+        AV_PIX_FMT_YUVA444P10, AV_PIX_FMT_YUVA444P12,
+        AV_PIX_FMT_YUVA444P16,
+
+        // YUVA422
+        AV_PIX_FMT_YUVA422P,   AV_PIX_FMT_YUVA422P9,
+        AV_PIX_FMT_YUVA422P10, AV_PIX_FMT_YUVA422P12,
+        AV_PIX_FMT_YUVA422P16,
+
+        // YUVA420
+        AV_PIX_FMT_YUVA420P,   AV_PIX_FMT_YUVA420P9,
+        AV_PIX_FMT_YUVA420P10, AV_PIX_FMT_YUVA420P16,
+
+        // YUVJ
+        AV_PIX_FMT_YUVJ444P, AV_PIX_FMT_YUVJ440P,
+        AV_PIX_FMT_YUVJ422P, AV_PIX_FMT_YUVJ420P,
+        AV_PIX_FMT_YUVJ411P,
+
+        // YUV444
+        AV_PIX_FMT_YUV444P,   AV_PIX_FMT_YUV444P9,
+        AV_PIX_FMT_YUV444P10, AV_PIX_FMT_YUV444P12,
+        AV_PIX_FMT_YUV444P14, AV_PIX_FMT_YUV444P16,
+
+        // YUV440
+        AV_PIX_FMT_YUV440P, AV_PIX_FMT_YUV440P10,
+        AV_PIX_FMT_YUV440P12,
+
+        // YUV422
+        AV_PIX_FMT_YUV422P,   AV_PIX_FMT_YUV422P9,
+        AV_PIX_FMT_YUV422P10, AV_PIX_FMT_YUV422P12,
+        AV_PIX_FMT_YUV422P14, AV_PIX_FMT_YUV422P16,
+
+        // YUV420
+        AV_PIX_FMT_YUV420P,   AV_PIX_FMT_YUV420P9,
+        AV_PIX_FMT_YUV420P10, AV_PIX_FMT_YUV420P12,
+        AV_PIX_FMT_YUV420P14, AV_PIX_FMT_YUV420P16,
+
+        // YUV411
+        AV_PIX_FMT_YUV411P,
+
+        // YUV410
+        AV_PIX_FMT_YUV410P,
+
+        // GBR
+        AV_PIX_FMT_GBRP,   AV_PIX_FMT_GBRP9,
+        AV_PIX_FMT_GBRP10, AV_PIX_FMT_GBRP12,
+        AV_PIX_FMT_GBRP14, AV_PIX_FMT_GBRP16,
+
+        // GBRA
+        AV_PIX_FMT_GBRAP,   AV_PIX_FMT_GBRAP10,
+        AV_PIX_FMT_GBRAP12, AV_PIX_FMT_GBRAP16,
+
+        // GRAY
+        AV_PIX_FMT_GRAY8,  AV_PIX_FMT_GRAY9,
+        AV_PIX_FMT_GRAY10, AV_PIX_FMT_GRAY12,
+        AV_PIX_FMT_GRAY14, AV_PIX_FMT_GRAY16,
+
+        AV_PIX_FMT_NONE
     };
 
     AVFilterFormats *fmts_list = ff_make_format_list(pix_fmts);
@@ -187,105 +242,54 @@ typedef struct XYRemap1 {
 } XYRemap1;
 
 /**
- * Slice remapping using window 1x1.
+ * Generate no-interpolation remapping function with a given pixel depth.
  *
- * @param ctx filter context
- * @param arg thread data
- * @param jobnr current job
- * @param nb_jobs jobs total
- *
- * @return error code
+ * @param bits number of bits per pixel
+ * @param div number of bytes per pixel
  */
-static int remap1_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
-{
-    ThreadData *td = (ThreadData*)arg;
-    const VR360Context *s = td->s;
-    const AVFrame *in = td->in;
-    AVFrame *out = td->out;
-
-    int plane, x, y;
-
-    for (plane = 0; plane < td->nb_planes; plane++) {
-        const int in_linesize  = in->linesize[plane];
-        const int out_linesize = out->linesize[plane];
-        const uint8_t *src = in->data[plane];
-        uint8_t *dst = out->data[plane];
-        const XYRemap1 *remap = s->remap[plane];
-        const int width = s->planewidth[plane];
-        const int height = s->planeheight[plane];
-
-        const int slice_start = (height *  jobnr     ) / nb_jobs;
-        const int slice_end   = (height * (jobnr + 1)) / nb_jobs;
-
-        for (y = slice_start; y < slice_end; y++) {
-            uint8_t *d = dst + y * out_linesize;
-            for (x = 0; x < width; x++) {
-                const XYRemap1 *r = &remap[y * width + x];
-
-                *d++ = src[r->v * in_linesize + r->u];
-            }
-        }
-    }
-
-    return 0;
+#define DEFINE_REMAP1(bits, div)                                                             \
+static int remap1_##bits##bit_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs) \
+{                                                                                            \
+    ThreadData *td = (ThreadData*)arg;                                                       \
+    const VR360Context *s = td->s;                                                           \
+    const AVFrame *in = td->in;                                                              \
+    AVFrame *out = td->out;                                                                  \
+                                                                                             \
+    int plane, x, y;                                                                         \
+                                                                                             \
+    for (plane = 0; plane < td->nb_planes; plane++) {                                        \
+        const int in_linesize  = in->linesize[plane];                                        \
+        const int out_linesize = out->linesize[plane];                                       \
+        const uint##bits##_t *src = (const uint##bits##_t *)in->data[plane];                 \
+        uint##bits##_t *dst = (uint##bits##_t *)out->data[plane];                            \
+        const XYRemap1 *remap = s->remap[plane];                                             \
+        const int width = s->planewidth[plane];                                              \
+        const int height = s->planeheight[plane];                                            \
+                                                                                             \
+        const int slice_start = (height *  jobnr     ) / nb_jobs;                            \
+        const int slice_end   = (height * (jobnr + 1)) / nb_jobs;                            \
+                                                                                             \
+        for (y = slice_start; y < slice_end; y++) {                                          \
+            uint##bits##_t *d = dst + y * out_linesize;                                      \
+            for (x = 0; x < width; x++) {                                                    \
+                const XYRemap1 *r = &remap[y * width + x];                                   \
+                                                                                             \
+                *d++ = src[r->v * in_linesize + r->u];                                       \
+            }                                                                                \
+        }                                                                                    \
+    }                                                                                        \
+                                                                                             \
+    return 0;                                                                                \
 }
+
+DEFINE_REMAP1( 8, 1)
+DEFINE_REMAP1(16, 2)
 
 typedef struct XYRemap2 {
     uint16_t u[2][2];
     uint16_t v[2][2];
     float ker[2][2];
 } XYRemap2;
-
-/**
- * Slice remapping using window 2x2.
- *
- * @param ctx filter context
- * @param arg thread data
- * @param jobnr current job
- * @param nb_jobs jobs total
- *
- * @return error code
- */
-static int remap2_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
-{
-    ThreadData *td = (ThreadData*)arg;
-    const VR360Context *s = td->s;
-    const AVFrame *in = td->in;
-    AVFrame *out = td->out;
-
-    int plane, x, y, i, j;
-
-    for (plane = 0; plane < td->nb_planes; plane++) {
-        const int in_linesize  = in->linesize[plane];
-        const int out_linesize = out->linesize[plane];
-        const uint8_t *src = in->data[plane];
-        uint8_t *dst = out->data[plane];
-        const XYRemap2 *remap = s->remap[plane];
-        const int width = s->planewidth[plane];
-        const int height = s->planeheight[plane];
-
-        const int slice_start = (height *  jobnr     ) / nb_jobs;
-        const int slice_end   = (height * (jobnr + 1)) / nb_jobs;
-
-        for (y = slice_start; y < slice_end; y++) {
-            uint8_t *d = dst + y * out_linesize;
-            for (x = 0; x < width; x++) {
-                const XYRemap2 *r = &remap[y * width + x];
-                float tmp = 0.f;
-
-                for (i = 0; i < 2; i++) {
-                    for (j = 0; j < 2; j++) {
-                        tmp += r->ker[i][j] * src[r->v[i][j] * in_linesize + r->u[i][j]];
-                    }
-                }
-
-                *d++ = roundf(tmp);
-            }
-        }
-    }
-
-    return 0;
-}
 
 typedef struct XYRemap4 {
     uint16_t u[4][4];
@@ -294,55 +298,58 @@ typedef struct XYRemap4 {
 } XYRemap4;
 
 /**
- * Slice remapping using window 4x4.
+ * Generate remapping function with a given window size and pixel depth.
  *
- * @param ctx filter context
- * @param arg thread data
- * @param jobnr current job
- * @param nb_jobs jobs total
- *
- * @return error code
+ * @param window_size size of interpolation window
+ * @param bits number of bits per pixel
+ * @param div number of bytes per pixel
  */
-static int remap4_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
-{
-    ThreadData *td = (ThreadData*)arg;
-    const VR360Context *s = td->s;
-    const AVFrame *in = td->in;
-    AVFrame *out = td->out;
-
-    int plane, x, y, i, j;
-
-    for (plane = 0; plane < td->nb_planes; plane++) {
-        const int in_linesize  = in->linesize[plane];
-        const int out_linesize = out->linesize[plane];
-        const uint8_t *src = in->data[plane];
-        uint8_t *dst = out->data[plane];
-        const XYRemap4 *remap = s->remap[plane];
-        const int width = s->planewidth[plane];
-        const int height = s->planeheight[plane];
-
-        const int slice_start = (height *  jobnr     ) / nb_jobs;
-        const int slice_end   = (height * (jobnr + 1)) / nb_jobs;
-
-        for (y = slice_start; y < slice_end; y++) {
-            uint8_t *d = dst + y * out_linesize;
-            for (x = 0; x < width; x++) {
-                const XYRemap4 *r = &remap[y * width + x];
-                float tmp = 0.f;
-
-                for (i = 0; i < 4; i++) {
-                    for (j = 0; j < 4; j++) {
-                        tmp += r->ker[i][j] * src[r->v[i][j] * in_linesize + r->u[i][j]];
-                    }
-                }
-
-                *d++ = av_clip(roundf(tmp), 0, 255);
-            }
-        }
-    }
-
-    return 0;
+#define DEFINE_REMAP(window_size, bits, div)                                                               \
+static int remap##window_size##_##bits##bit_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs) \
+{                                                                                                          \
+    ThreadData *td = (ThreadData*)arg;                                                                     \
+    const VR360Context *s = td->s;                                                                         \
+    const AVFrame *in = td->in;                                                                            \
+    AVFrame *out = td->out;                                                                                \
+                                                                                                           \
+    int plane, x, y, i, j;                                                                                 \
+                                                                                                           \
+    for (plane = 0; plane < td->nb_planes; plane++) {                                                      \
+        const int in_linesize  = in->linesize[plane]  / div;                                               \
+        const int out_linesize = out->linesize[plane] / div;                                               \
+        const uint##bits##_t *src = (const uint##bits##_t *)in->data[plane];                               \
+        uint##bits##_t *dst = (uint##bits##_t *)out->data[plane];                                          \
+        const XYRemap##window_size *remap = s->remap[plane];                                               \
+        const int width = s->planewidth[plane];                                                            \
+        const int height = s->planeheight[plane];                                                          \
+                                                                                                           \
+        const int slice_start = (height *  jobnr     ) / nb_jobs;                                          \
+        const int slice_end   = (height * (jobnr + 1)) / nb_jobs;                                          \
+                                                                                                           \
+        for (y = slice_start; y < slice_end; y++) {                                                        \
+            uint##bits##_t *d = dst + y * out_linesize;                                                    \
+            for (x = 0; x < width; x++) {                                                                  \
+                const XYRemap##window_size *r = &remap[y * width + x];                                     \
+                float tmp = 0.f;                                                                           \
+                                                                                                           \
+                for (i = 0; i < window_size; i++) {                                                        \
+                    for (j = 0; j < window_size; j++) {                                                    \
+                        tmp += r->ker[i][j] * src[r->v[i][j] * in_linesize + r->u[i][j]];                  \
+                    }                                                                                      \
+                }                                                                                          \
+                                                                                                           \
+                *d++ = av_clip_uint##bits(roundf(tmp));                                                    \
+            }                                                                                              \
+        }                                                                                                  \
+    }                                                                                                      \
+                                                                                                           \
+    return 0;                                                                                              \
 }
+
+DEFINE_REMAP(2,  8, 1)
+DEFINE_REMAP(4,  8, 1)
+DEFINE_REMAP(2, 16, 2)
+DEFINE_REMAP(4, 16, 2)
 
 /**
  * Save nearest pixel coordinates for remapping.
@@ -1600,6 +1607,7 @@ static int config_output(AVFilterLink *outlink)
     AVFilterLink *inlink = ctx->inputs[0];
     VR360Context *s = ctx->priv;
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(inlink->format);
+    const int depth = desc->comp[0].depth;
     float remap_data_size = 0.f;
     int sizeof_remap;
     int err;
@@ -1618,22 +1626,22 @@ static int config_output(AVFilterLink *outlink)
     switch (s->interp) {
     case NEAREST:
         calculate_kernel = nearest_kernel;
-        s->remap_slice = remap1_slice;
+        s->remap_slice = depth <= 8 ? remap1_8bit_slice : remap1_16bit_slice;
         sizeof_remap = sizeof(XYRemap1);
         break;
     case BILINEAR:
         calculate_kernel = bilinear_kernel;
-        s->remap_slice = remap2_slice;
+        s->remap_slice = depth <= 8 ? remap2_8bit_slice : remap2_16bit_slice;
         sizeof_remap = sizeof(XYRemap2);
         break;
     case BICUBIC:
         calculate_kernel = bicubic_kernel;
-        s->remap_slice = remap4_slice;
+        s->remap_slice = depth <= 8 ? remap4_8bit_slice : remap4_16bit_slice;
         sizeof_remap = sizeof(XYRemap4);
         break;
     case LANCZOS:
         calculate_kernel = lanczos_kernel;
-        s->remap_slice = remap4_slice;
+        s->remap_slice = depth <= 8 ? remap4_8bit_slice : remap4_16bit_slice;
         sizeof_remap = sizeof(XYRemap4);
         break;
     }
