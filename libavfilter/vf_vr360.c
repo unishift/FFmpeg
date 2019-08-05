@@ -260,8 +260,8 @@ static int remap1_##bits##bit_slice(AVFilterContext *ctx, void *arg, int jobnr, 
     int plane, x, y;                                                                         \
                                                                                              \
     for (plane = 0; plane < td->nb_planes; plane++) {                                        \
-        const int in_linesize  = in->linesize[plane];                                        \
-        const int out_linesize = out->linesize[plane];                                       \
+        const int in_linesize  = in->linesize[plane]  / div;                                 \
+        const int out_linesize = out->linesize[plane] / div;                                 \
         const uint##bits##_t *src = (const uint##bits##_t *)in->data[plane];                 \
         uint##bits##_t *dst = (uint##bits##_t *)out->data[plane];                            \
         const XYRemap1 *remap = s->remap[plane];                                             \
