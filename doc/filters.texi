@@ -18009,7 +18009,7 @@ Default value is @b{@samp{000000}}.
 Equi-Angular Cubemap.
 
 @item flat
-Regular video. (output only)
+Regular video. @i{(output only)}
 
 Format specific options:
 @table @option
@@ -18020,7 +18020,8 @@ Set horizontal/vertical field of view. Values in degrees.
 @end table
 
 @item interp
-Set interpolation method.
+Set interpolation method.@*
+@i{Note: more complex interpolation methods require much more memory to run.}
 
 Available methods:
 
@@ -18063,9 +18064,14 @@ Flip the output video horizontally/vertically/in-depth. Boolean values.
 
 @itemize
 @item
-Convert equirectangular video to cubemap with 3x2 layout using bilinear interpolation:
+Convert equirectangular video to cubemap with 3x2 layout using bicubic interpolation:
 @example
-ffmpeg -i input.mkv -vf vr360=e:c3x2:line output.mkv
+ffmpeg -i input.mkv -vf vr360=e:c3x2:cubic output.mkv
+@end example
+@item
+Extract back view of Equi-Angular Cubemap:
+@example
+ffmpeg -i input.mkv -vf vr360=eac:flat:yaw=180 output.mkv
 @end example
 @end itemize
 
