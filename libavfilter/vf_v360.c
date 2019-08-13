@@ -101,7 +101,7 @@ typedef struct V360Context {
     int out_cubemap_direction_order[6];
     int in_cubemap_face_rotation[6];
     int out_cubemap_face_rotation[6];
-    float in_cubemap_pad, out_cubemap_pad;
+    float in_pad, out_pad;
 
     float yaw, pitch, roll;
 
@@ -156,8 +156,8 @@ static const AVOption v360_options[] = {
     {"out_forder", "output cubemap face order", OFFSET(out_forder), AV_OPT_TYPE_STRING, {.str="rludfb"},        0,     NB_DIRECTIONS-1, FLAGS, "out_forder"},
     {   "in_frot", "input cubemap face rotation",  OFFSET(in_frot), AV_OPT_TYPE_STRING, {.str="000000"},        0,     NB_DIRECTIONS-1, FLAGS, "in_frot"},
     {  "out_frot", "output cubemap face rotation",OFFSET(out_frot), AV_OPT_TYPE_STRING, {.str="000000"},        0,     NB_DIRECTIONS-1, FLAGS, "out_frot"},
-    {    "in_pad", "input cubemap pads",    OFFSET(in_cubemap_pad), AV_OPT_TYPE_FLOAT,  {.dbl=0.01f},         0.f,                 1.f, FLAGS, "in_pad"},
-    {   "out_pad", "output cubemap pads",  OFFSET(out_cubemap_pad), AV_OPT_TYPE_FLOAT,  {.dbl=0.01f},         0.f,                 1.f, FLAGS, "out_pad"},
+    {    "in_pad", "input cubemap pads",            OFFSET(in_pad), AV_OPT_TYPE_FLOAT,  {.dbl=0.f},           0.f,                 1.f, FLAGS, "in_pad"},
+    {   "out_pad", "output cubemap pads",          OFFSET(out_pad), AV_OPT_TYPE_FLOAT,  {.dbl=0.f},           0.f,                 1.f, FLAGS, "out_pad"},
     {       "yaw", "yaw rotation",                     OFFSET(yaw), AV_OPT_TYPE_FLOAT,  {.dbl=0.f},        -180.f,               180.f, FLAGS, "yaw"},
     {     "pitch", "pitch rotation",                 OFFSET(pitch), AV_OPT_TYPE_FLOAT,  {.dbl=0.f},        -180.f,               180.f, FLAGS, "pitch"},
     {      "roll", "roll rotation",                   OFFSET(roll), AV_OPT_TYPE_FLOAT,  {.dbl=0.f},        -180.f,               180.f, FLAGS, "roll"},
@@ -737,8 +737,8 @@ static void cube_to_xyz(const V360Context *s,
     float norm;
     float l_x, l_y, l_z;
 
-    uf /= (1.f - s->out_cubemap_pad);
-    vf /= (1.f - s->out_cubemap_pad);
+    uf /= (1.f - s->out_pad);
+    vf /= (1.f - s->out_pad);
 
     rotate_cube_face_inverse(&uf, &vf, s->out_cubemap_face_rotation[face]);
 
@@ -1097,8 +1097,8 @@ static void xyz_to_cube3x2(const V360Context *s,
 
     xyz_to_cube(s, vec, &uf, &vf, &direction);
 
-    uf *= (1.f - s->in_cubemap_pad);
-    vf *= (1.f - s->in_cubemap_pad);
+    uf *= (1.f - s->in_pad);
+    vf *= (1.f - s->in_pad);
 
     face = s->in_cubemap_face_order[direction];
     u_face = face % 3;
@@ -1133,13 +1133,13 @@ static void xyz_to_cube3x2(const V360Context *s,
                 uf = 2.f * new_ui / ewi - 1.f;
                 vf = 2.f * new_vi / ehi - 1.f;
 
-                uf /= (1.f - s->in_cubemap_pad);
-                vf /= (1.f - s->in_cubemap_pad);
+                uf /= (1.f - s->in_pad);
+                vf /= (1.f - s->in_pad);
 
                 process_cube_coordinates(s, uf, vf, direction, &uf, &vf, &face);
 
-                uf *= (1.f - s->in_cubemap_pad);
-                vf *= (1.f - s->in_cubemap_pad);
+                uf *= (1.f - s->in_pad);
+                vf *= (1.f - s->in_pad);
 
                 u_face = face % 3;
                 v_face = face / 3;
@@ -1213,8 +1213,8 @@ static void xyz_to_cube6x1(const V360Context *s,
 
     xyz_to_cube(s, vec, &uf, &vf, &direction);
 
-    uf *= (1.f - s->in_cubemap_pad);
-    vf *= (1.f - s->in_cubemap_pad);
+    uf *= (1.f - s->in_pad);
+    vf *= (1.f - s->in_pad);
 
     face = s->in_cubemap_face_order[direction];
     ewi = ceilf(ew * (face + 1)) - ceilf(ew * face);
@@ -1243,13 +1243,13 @@ static void xyz_to_cube6x1(const V360Context *s,
                 uf = 2.f * new_ui / ewi - 1.f;
                 vf = 2.f * new_vi / ehi - 1.f;
 
-                uf /= (1.f - s->in_cubemap_pad);
-                vf /= (1.f - s->in_cubemap_pad);
+                uf /= (1.f - s->in_pad);
+                vf /= (1.f - s->in_pad);
 
                 process_cube_coordinates(s, uf, vf, direction, &uf, &vf, &face);
 
-                uf *= (1.f - s->in_cubemap_pad);
-                vf *= (1.f - s->in_cubemap_pad);
+                uf *= (1.f - s->in_pad);
+                vf *= (1.f - s->in_pad);
 
                 u_shift = ceilf(ew * face);
                 new_ewi = ceilf(ew * (face + 1)) - u_shift;
