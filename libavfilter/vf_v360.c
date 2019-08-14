@@ -1594,6 +1594,18 @@ static void flat_to_xyz(const V360Context *s,
     vec[2] = l_z / norm;
 }
 
+/**
+ * Calculate frame position in dual fisheye format for corresponding 3D coordinates on sphere.
+ *
+ * @param s filter context
+ * @param vec coordinates on sphere
+ * @param width frame width
+ * @param height frame height
+ * @param us horizontal coordinates for interpolation window
+ * @param vs vertical coordinates for interpolation window
+ * @param du horizontal relative coordinate
+ * @param dv vertical relative coordinate
+ */
 static void xyz_to_dfisheye(const V360Context *s,
                             const float *vec, int width, int height,
                             uint16_t us[4][4], uint16_t vs[4][4], float *du, float *dv)
