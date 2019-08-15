@@ -102,6 +102,7 @@ typedef struct V360Context {
     int out_cubemap_direction_order[6];
     int in_cubemap_face_rotation[6];
     int out_cubemap_face_rotation[6];
+
     float in_pad, out_pad;
 
     float yaw, pitch, roll;
@@ -552,16 +553,16 @@ static int get_direction(char c)
 static int get_rotation(char c)
 {
     switch (c) {
-        case '0':
-            return ROT_0;
-        case '1':
-            return ROT_90;
-        case '2':
-            return ROT_180;
-        case '3':
-            return ROT_270;
-        default:
-            return -1;
+    case '0':
+        return ROT_0;
+    case '1':
+        return ROT_90;
+    case '2':
+        return ROT_180;
+    case '3':
+        return ROT_270;
+    default:
+        return -1;
     }
 }
 
@@ -1788,6 +1789,10 @@ static int config_output(AVFilterLink *outlink)
         err = 0;
         wf = inlink->w;
         hf = inlink->h;
+        break;
+    default:
+        av_log(ctx, AV_LOG_ERROR, "Specified input format is not handled.\n");
+        return AVERROR_BUG;
     }
 
     if (err != 0) {
@@ -1825,15 +1830,25 @@ static int config_output(AVFilterLink *outlink)
         w = roundf(wf * s->flat_range[0] / s->flat_range[1] / 2.f);
         h = roundf(hf);
         break;
+    case DUAL_FISHEYE:
+        av_log(ctx, AV_LOG_ERROR, "Dual fisheye format is not accepted as output.\n");
+        return AVERROR(EINVAL);
+    default:
+        av_log(ctx, AV_LOG_ERROR, "Specified output format is not handled.\n");
+        return AVERROR_BUG;
     }
 
     if (err != 0) {
         return err;
     }
 
+    // Override resolution with user values if specified
     if (s->width > 0 && s->height > 0) {
         w = s->width;
         h = s->height;
+    } else if (s->width > 0 || s->height > 0) {
+        av_log(ctx, AV_LOG_ERROR, "Both width and height values should be specified.\n");
+        return AVERROR(EINVAL);
     }
 
     s->planeheight[1] = s->planeheight[2] = FF_CEIL_RSHIFT(h, desc->log2_chroma_h);
