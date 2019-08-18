@@ -17477,6 +17477,9 @@ No padding.
 Default value is @b{@samp{0}}.
 @end table
 
+@item fb
+Facebook's 360 format.
+
 @end table
 
 @item interp
